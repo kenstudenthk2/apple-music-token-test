@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppleTune TV — Live</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+<style>
+  /* Live-only affordances. Everything else comes from the reviewed design system. */
+  .boot {
+    position: absolute;
+    inset: var(--safe-y) var(--safe-x);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-3);
+  }
+  .boot__code {
+    font-family: var(--font-num);
+    font-size: var(--fs-display);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.12em;
+    color: var(--art-accent);
+  }
+  .boot__url { font-size: var(--fs-title-sm); color: var(--text-primary); }
+  .boot__status { font-size: var(--fs-body-lg); color: var(--text-tertiary); }
+  .boot__error { color: var(--danger); }
+
+  /* Real artwork, unlike the prototype's CSS gradients. */
+  .tile__art img, .now__label img, .miniplayer__art img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .now__label img { border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <section class="screen" data-screen="boot" data-active="true">
+    <div class="boot">
+      <div class="pair__eyebrow">AppleTune TV — live data</div>
+      <h1 class="pair__headline" id="boot-title">Connecting…</h1>
+      <div class="boot__url" id="boot-url"></div>
+      <div class="boot__code" id="boot-code"></div>
+      <div class="boot__status" id="boot-status">Starting up.</div>
+    </div>
+  </section>
+
+  <section class="screen" data-screen="home">
+    <div class="screen__body">
+      <nav class="nav" data-focus-group="nav">
+        <div class="nav__brand">AppleTune</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-current="true">Home</div>
+        <div class="nav__spacer"></div>
+        <div class="nav__meta" id="home-clock"></div>
+      </nav>
+      <div class="shelves">
+        <div class="shelves__track" id="home-shelves"></div>
+      </div>
+    </div>
+
+    <div class="miniplayer" id="miniplayer">
+      <div class="miniplayer__art" id="mini-art"></div>
+      <div class="miniplayer__text">
+        <div class="miniplayer__title" id="mini-title">—</div>
+        <div class="miniplayer__artist" id="mini-artist">—</div>
+      </div>
+      <div class="miniplayer__hint">Press <kbd>OK</kbd> to play</div>
+    </div>
+  </section>
+
+  <section class="screen" data-screen="now">
+    <div class="now" id="now" data-playing="false">
+      <div class="now__bloom"></div>
+      <div class="now__scrim"></div>
+      <div class="now__body">
+        <div class="now__disc">
+          <div class="now__vinyl"></div>
+          <div class="now__label" id="now-art"></div>
+        </div>
+        <div class="now__meta">
+          <div class="now__eyebrow" id="now-source">Playing</div>
+          <h1 class="now__title" id="now-title">—</h1>
+          <p class="now__artist" id="now-artist">—</p>
+          <p class="now__album" id="now-album">—</p>
+        </div>
+        <div class="now__transport">
+          <div class="now__scrub">
+            <span id="now-elapsed">0:00</span>
+            <span class="now__bar"><span class="now__fill" id="now-fill"></span></span>
+            <span id="now-total">0:00</span>
+          </div>
+          <div class="now__buttons" data-focus-group="transport">
+            <div class="control focusable" data-size="sm" data-focusable data-action="prev">⏮</div>
+            <div class="control focusable" data-size="sm" data-focusable data-action="playpause"
+                 data-primary="true" id="now-playpause">▶</div>
+            <div class="control focusable" data-size="sm" data-focusable data-action="next">⏭</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="hints"><span><kbd>BACK</kbd>Home</span><span><kbd>OK</kbd>Play / Pause</span></div>
+  </section>
+
+</div>
+
+<script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" data-web-components async></script>
+<script type="module">
+/**
+ * Live shell — the reviewed design system rendering real Apple Music data.
+ *
+ * Kept separate from index.html on purpose. The prototype must keep rendering
+ * with the network switched off so it stays reviewable as a single file; this
+ * page needs a token and a network and would destroy that property.
+ *
+ * The Music User Token is read from sessionStorage. It is never written to a
+ * file here, never placed in a URL, and never rendered.
+ */
+import { createClient, artworkUrl } from "./scripts/api.js";
+import { createPlayer } from "./scripts/player.js";
+import { init, focus, onBack, refresh } from "./scripts/spatial-nav.js";
+
+const el = (id) => document.getElementById(id);
+const mmss = (s) => `${Math.floor((s || 0) / 60)}:${String(Math.floor(s || 0) % 60).padStart(2, "0")}`;
+
+function show(name) {
+  for (const screen of document.querySelectorAll(".screen")) {
+    screen.dataset.active = String(screen.dataset.screen === name);
+  }
+  void document.querySelector(`[data-screen="${name}"]`).offsetHeight;
+  refresh();
+}
+
+function status(message, isError = false) {
+  el("boot-status").textContent = message;
+  el("boot-status").classList.toggle("boot__error", isError);
+}
+
+/** Ask the page for a Music User Token, pairing if it does not already have one. */
+async function obtainUserToken() {
+  const cached = sessionStorage.getItem("mut");
+  if (cached) return cached;
+
+  const session = await fetch("/api/session", { method: "POST" }).then((r) => r.json());
+  el("boot-title").textContent = "Scan to connect";
+  el("boot-url").textContent = session.activate_url;
+  el("boot-code").textContent = session.user_code;
+  status("Waiting for your phone…");
+
+  const deadline = Date.now() + session.expires_in * 1000;
+  while (Date.now() < deadline) {
+    const response = await fetch("/api/session/token", {
+      headers: { Authorization: `Bearer ${session.device_code}` },
+    });
+    if (response.status === 404) throw new Error("The pairing session expired.");
+    const body = await response.json();
+    if (body.status === "authorized") {
+      sessionStorage.setItem("mut", body.musicUserToken);
+      return body.musicUserToken;
+    }
+    await new Promise((r) => setTimeout(r, (session.interval || 2) * 1000));
+  }
+  throw new Error("Timed out waiting for authorization.");
+}
+
+/**
+ * Apply an item's palette.
+ *
+ * Library items carry no colours — Apple ships bgColor/textColor only on
+ * CATALOG artwork, which live data revealed and the research note did not.
+ * A null palette therefore means "keep the design system's own accent", never
+ * "invent one".
+ */
+function applyPalette(item) {
+  const accent = item?.palette?.background;
+  if (accent) {
+    document.documentElement.style.setProperty("--art-accent", accent);
+  } else {
+    document.documentElement.style.removeProperty("--art-accent");
+  }
+}
+
+function artImg(item, size) {
+  const url = artworkUrl(item.artwork, size);
+  if (!url) return "";
+  // Titles and artwork are user data; build the node rather than interpolating.
+  return `<img alt="" loading="lazy" src="${url.replace(/"/g, "&quot;")}">`;
+}
+
+function tile(item, shelfIndex, itemIndex) {
+  const node = document.createElement("div");
+  node.className = "tile focusable";
+  node.setAttribute("data-focusable", "");
+  node.dataset.shelf = String(shelfIndex);
+  node.dataset.index = String(itemIndex);
+  node.innerHTML = `
+    <div class="tile__art">${artImg(item, 288 * (window.devicePixelRatio || 1))}</div>
+    <div class="tile__label">
+      <div class="tile__title"></div>
+      <div class="tile__subtitle"></div>
+    </div>`;
+  node.querySelector(".tile__title").textContent = item.title;
+  node.querySelector(".tile__subtitle").textContent = item.artist;
+  node.__item = item;
+  return node;
+}
+
+function renderShelves(shelves) {
+  const track = el("home-shelves");
+  track.textContent = "";
+  shelves.forEach((shelf, shelfIndex) => {
+    if (!shelf.items.length) return;
+    const section = document.createElement("section");
+    section.className = "shelf";
+    const header = document.createElement("h2");
+    header.className = "shelf__header";
+    header.textContent = shelf.title;
+    const viewport = document.createElement("div");
+    viewport.className = "shelf__viewport";
+    const row = document.createElement("div");
+    row.className = "shelf__row";
+    row.dataset.focusGroup = `shelf-${shelfIndex}`;
+    shelf.items.forEach((item, i) => row.appendChild(tile(item, shelfIndex, i)));
+    viewport.appendChild(row);
+    section.append(header, viewport);
+    track.appendChild(section);
+  });
+}
+
+function positionShelves(node) {
+  const stack = el("home-shelves");
+  const section = node.closest(".shelf");
+  if (!section || !stack.firstElementChild) return;
+  stack.style.transform =
+    `translate3d(0, ${-(section.offsetTop - stack.firstElementChild.offsetTop)}px, 0)`;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const parked = Math.max(0, Number(node.dataset.index) - 1);
+  node.parentElement.style.transform = `translate3d(${-parked * 19.5 * rem}px, 0, 0)`;
+}
+
+async function main() {
+  try {
+    status("Fetching developer token…");
+    const { developerToken } = await fetch("/api/developer-token").then((r) => r.json());
+    const musicUserToken = await obtainUserToken();
+
+    status("Loading your music…");
+    const client = createClient({
+      developerToken,
+      musicUserToken,
+      onAuthLost: () => status("Your Apple Music session expired. Pair again.", true),
+    });
+
+    // Fetched in parallel: on a TV the wait is the first thing anybody judges.
+    const settle = (p) => p.then((v) => v, () => []);
+    const [recent, recommended, playlists, albums] = await Promise.all([
+      settle(client.recentlyPlayed(12)),
+      settle(client.recommendations(12)),
+      settle(client.libraryPlaylists(12)),
+      settle(client.libraryAlbums(12)),
+    ]);
+
+    renderShelves([
+      { title: "Recently Played", items: recent },
+      { title: "Made For You", items: recommended.slice(0, 12) },
+      { title: "Your Playlists", items: playlists },
+      { title: "Your Albums", items: albums },
+    ]);
+
+    const hour = new Date().getHours();
+    el("home-clock").textContent =
+      hour < 5 ? "Good night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+    let player = null;
+    const ensurePlayer = async () => {
+      if (!player) {
+        player = await createPlayer({
+          developerToken,
+          musicUserToken,
+          onChange: (state) => {
+            el("now").dataset.playing = String(state.playing);
+            el("now-playpause").textContent = state.playing ? "⏸" : "▶";
+            el("now-elapsed").textContent = mmss(state.position);
+            el("now-total").textContent = mmss(state.duration);
+            el("now-fill").style.transform =
+              `scaleX(${state.duration ? Math.min(1, state.position / state.duration) : 0})`;
+            if (state.item) {
+              el("now-title").textContent = state.item.title;
+              el("now-artist").textContent = state.item.artist;
+              el("now-album").textContent = state.item.album;
+              el("mini-title").textContent = state.item.title;
+              el("mini-artist").textContent = state.item.artist;
+              el("miniplayer").dataset.visible = "true";
+              const art = artworkUrl(state.item.artwork, 560);
+              if (art) el("now-art").innerHTML = `<img alt="" src="${art}">`;
+              const mini = artworkUrl(state.item.artwork, 96);
+              if (mini) el("mini-art").innerHTML = `<img alt="" src="${mini}">`;
+            }
+          },
+        });
+      }
+      return player;
+    };
+
+    document.addEventListener("spatialfocus", (event) => {
+      for (const stale of document.querySelectorAll('[data-focused="true"]')) {
+        stale.removeAttribute("data-focused");
+      }
+      const node = event.detail.element;
+      if (!node) return;
+      node.setAttribute("data-focused", "true");
+      if (node.classList.contains("tile")) {
+        positionShelves(node);
+        applyPalette(node.__item);
+      }
+    });
+
+    document.addEventListener("spatialselect", async (event) => {
+      const node = event.detail.element;
+      try {
+        if (node.classList.contains("tile")) {
+          applyPalette(node.__item);
+          show("now");
+          status("");
+          const p = await ensurePlayer();
+          await p.play(node.__item.play);
+          return;
+        }
+        const action = node.dataset.action;
+        if (!action || !player) return;
+        if (action === "playpause") await player.toggle();
+        if (action === "next") await player.next();
+        if (action === "prev") await player.previous();
+      } catch (error) {
+        el("now-source").textContent = `Playback error: ${error.message}`;
+      }
+    });
+
+    onBack(() => {
+      if (document.querySelector('.screen[data-active="true"]')?.dataset.screen === "now") {
+        show("home");
+      }
+      return true;
+    });
+
+    show("home");
+    init(document.getElementById("app"));
+    const first = document.querySelector(".tile");
+    if (first) focus(first);
+  } catch (error) {
+    el("boot-title").textContent = "Could not start";
+    status(error.message, true);
+  }
+}
+
+main();
+</script>
+</body>
+</html>

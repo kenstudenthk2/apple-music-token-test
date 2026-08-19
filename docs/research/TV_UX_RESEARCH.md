@@ -13,6 +13,23 @@ Author: UX Researcher agent
 
 ## 1. Executive Summary — five things a designer can act on today
 
+> **CORRECTION, 2026-08-20, from live API data.** Finding 1 below is true for
+> **catalog** items and **false for library** items. Verified against a real
+> account:
+>
+> | Source | `artwork` fields returned |
+> |---|---|
+> | Catalog (`/v1/catalog/...`, recently-played tracks, search, charts) | `bgColor`, `textColor1`–`textColor4`, `url`, `width`, `height` |
+> | Library (`/v1/me/library/albums`, `/v1/me/library/playlists`) | `url`, `width`, `height` — **no colours** |
+>
+> Library albums also expose no `playParams.catalogId`, so there is no cheap
+> lookup to fill the gap. `api.js` returns `palette: null` for these and the UI
+> keeps the design system's own accent rather than inventing a colour.
+>
+> Practical impact is limited: Now Playing is normally reached from Recently
+> Played, recommendations or search, all of which are catalog-backed and do
+> carry colours. Only pure library content loses the adaptive wash.
+
 1. **You do not need to extract colours from album art — Apple already gives them to you.**
    The Apple Music API `Artwork` object ships `bgColor` and `textColor1`–`textColor4` as hex
    strings alongside a `url` containing `{w}x{h}` placeholders you substitute at request time.

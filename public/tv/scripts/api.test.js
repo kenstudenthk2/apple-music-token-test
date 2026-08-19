@@ -199,3 +199,12 @@ test("library tracks and catalog tracks use different endpoints", async () => {
   assert.match(impl.calls[0], /\/v1\/me\/library\/library-playlists\/l\.abc\/tracks/);
   assert.match(impl.calls[1], /\/v1\/catalog\/us\/playlists\/pl\.xyz\/tracks/);
 });
+
+test("library artwork yields no palette, because Apple ships colours only on catalog items", () => {
+  // Verified against a real account on 2026-08-20: /v1/me/library/albums returns
+  // artwork with url, width and height only. Returning null here is what lets
+  // the UI keep its own accent instead of rendering an invented colour.
+  const libraryArtwork = { url: "https://.../{w}x{h}{c}.{f}", width: 1200, height: 1200 };
+  assert.equal(artworkPalette(libraryArtwork), null);
+  assert.ok(artworkUrl(libraryArtwork, 288), "the image itself is still available");
+});
