@@ -238,6 +238,31 @@ async function handleRequest(req, res, developerTokenFor) {
   const url = new URL(req.url, `http://${req.headers.host || `localhost:${PORT}`}`);
   const { pathname } = url;
 
+  /**
+   * Which commit is this machine actually serving?
+   *
+   * Static files are read from disk per request, so a `git pull` takes effect
+   * without a restart — but there is no way to tell from the television whether
+   * it did. That ambiguity has now cost several rounds of "is this fixed?"
+   * against a screenshot of the old build. Read per request, for the same
+   * reason the files are.
+   */
+  if (req.method === "GET" && pathname === "/api/version") {
+    let commit = "unknown";
+    try {
+      const head = fs.readFileSync(path.join(__dirname, ".git", "HEAD"), "utf8").trim();
+      const ref = head.startsWith("ref: ") ? head.slice(5) : null;
+      commit = ref
+        ? fs.readFileSync(path.join(__dirname, ".git", ref), "utf8").trim().slice(0, 7)
+        : head.slice(0, 7);
+    } catch (error) {
+      // A checkout without .git is fine; say so rather than failing the request.
+      commit = "no-git";
+    }
+    sendJson(res, 200, { commit });
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/api/developer-token") {
     // A developer token is designed to be exposed to web clients; it grants
     // catalog access only, never access to a user's library.

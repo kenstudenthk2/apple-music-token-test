@@ -117,6 +117,16 @@ import { init, focus } from "./scripts/spatial-nav.js";
    across TV devices and belongs in any result we record. */
 document.getElementById("env").textContent = navigator.userAgent;
 
+/* Show which commit this machine is serving, so "did my git pull reach the
+   television?" is answerable at a glance instead of by comparing screenshots. */
+fetch("/api/version")
+  .then((r) => r.json())
+  .then(({ commit }) => {
+    document.getElementById("env").textContent =
+      `serving commit ${commit}  ·  ${navigator.userAgent}`;
+  })
+  .catch(() => { /* the launcher is still usable without it */ });
+
 document.addEventListener("spatialfocus", (event) => {
   for (const stale of document.querySelectorAll('[data-focused="true"]')) {
     stale.removeAttribute("data-focused");
