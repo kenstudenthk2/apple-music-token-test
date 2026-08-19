@@ -207,7 +207,7 @@ five screens. This document walks through the current prototype
 | Remote key | What happens |
 |---|---|
 | ▲ ▼ | Move focus between nav bar and playlist rows. |
-| OK on a playlist row | **Does not open the playlist.** It plays the first item of the "Your Library" shelf ("Golden Hour Radio" by The Long Way) and jumps to Now Playing — a known prototype shortcut, see Notes. |
+| OK on a playlist row | **Does not open the playlist.** It maps the row's position onto a distinct release from the "Your Library" shelf and jumps straight to Now Playing — a known prototype shortcut, see Notes. |
 | OK on "Home" / "Search" | Goes to that screen. |
 | BACK | Returns to Home (pops history). |
 
@@ -215,7 +215,16 @@ five screens. This document walks through the current prototype
 **BACK:** pops `app.history`, normally landing on Home.
 
 **Notes**
-- The `playlist` action in `app.js` is explicitly a stand-in: the code comment says the real app opens a track-list detail screen first (reusing the same `.list` component this screen already uses), but the prototype skips straight to playback so the Now Playing screen gets exercised from every entry point.
+- The `playlist` action in `app.js` is explicitly a stand-in: the code comment says the real app opens a track-list detail screen first (reusing the same `.list` component this screen already uses), but the prototype skips straight to playback so the Now Playing screen gets exercised from every entry point. Each of the six playlists maps to a different "Your Library" release, so review doesn't see the same track land on every row:
+
+  | Playlist | Plays |
+  |---|---|
+  | Late Night Drive | Golden Hour Radio |
+  | Kitchen Sunday | Harbour Lights |
+  | Focus, No Words | Slow Tide |
+  | Cantopop Forever | Sunroom |
+  | Rainy Window | Neon Harbour |
+  | Gym, Reluctantly | Paper Lanterns |
 - The hero art tile is a gradient blended from the accents of playlists 1 and 4 — cosmetic only, not tied to what's playing.
 
 ---
@@ -256,10 +265,10 @@ five screens. This document walks through the current prototype
 | OK on a letter/number key | Appends that character to the query and re-filters live. |
 | OK on SPACE / DELETE | Appends a space / removes the last character. |
 | OK on a result row | Plays that release and goes to Now Playing (same `open` action as a Home tile). |
-| BACK | Returns to Home (pops history) — **not** a backspace, regardless of query state. |
+| BACK | Deletes the last character of the query while the query is non-empty. Once the query is empty, BACK returns to Home (pops history). |
 
 **Focus on entry:** the first keyboard key, `A` (`ENTRY_FOCUS.search`).
-**BACK:** pops `app.history`; unlike the target design in `NAVIGATION_MODEL.md` §2 (where BACK deletes a character while the query is non-empty), the implemented `handleBack()` treats every non-Home/Pair screen identically and always leaves Search entirely. Character deletion is only reachable via the on-screen DELETE key.
+**BACK:** while `app.query` is non-empty, deletes its last character and stays on Search (matches `NAVIGATION_MODEL.md` §2 — "BACK *is* backspace"). Only once the query is empty does BACK pop `app.history` and leave the screen, normally landing on Home. Character deletion is also reachable via the on-screen DELETE key.
 
 **Notes**
 - Matching is a case-insensitive substring match against `"${title} ${artist}"`, deduplicated across the Recently Played, Made For You, and New Releases shelves — which together cover all 12 demo releases, so nothing in the catalogue is unreachable from Search.
@@ -288,14 +297,15 @@ stateDiagram-v2
     search --> home: OK on "Home" nav item
     search --> library: OK on "Library" nav item
     search --> now: OK on a result row
-    search --> home: BACK
+    search --> search: BACK (backspace, while query is non-empty)
+    search --> home: BACK (query empty)
 
     now --> home: BACK (if opened from Home)
     now --> library: BACK (if opened from Library)
     now --> search: BACK (if opened from Search)
 ```
 
-BACK from Now Playing, Library, and Search all resolve the same way in code: pop `app.history` (falling back to `home` if the stack is empty). The three separate edges above show the three screens it can actually return to in practice.
+BACK from Now Playing and Library pops `app.history` (falling back to `home` if the stack is empty); the three separate `now -->` edges above show the three screens it can actually return to in practice. BACK on Search is special-cased ahead of that: it backspaces the query while non-empty, and only falls through to the same history-pop once the query is empty.
 
 ---
 
@@ -306,7 +316,7 @@ BACK from Now Playing, Library, and Search all resolve the same way in code: pop
 - **The QR bitmap** is a deterministic pseudo-random pattern seeded from the pairing code (`drawQrPlaceholder`), sized and finder-patterned to *look* like a QR code. **It will not scan.**
 - **Pairing** is simulated: pressing OK anywhere on the Pairing screen calls `completePairing()` directly. No phone, no network call, no `pairing-server.js` round trip.
 - **Search** only matches the 12 demo releases hard-coded in `demo-data.js` — there is no real or fake catalogue beyond that set.
-- Opening a **playlist** doesn't open the playlist — it plays a hard-coded track from the "Your Library" shelf instead (see Library section, Notes).
+- Opening a **playlist** doesn't open the playlist — it skips the track-list screen and plays a stand-in album from the "Your Library" shelf instead (see Library section, Notes).
 - The pairing **expiry countdown** visually ticks down but does nothing at zero.
 - **Exit confirmation** on Home's BACK, described in `NAVIGATION_MODEL.md` (`SX`), is not implemented — BACK is simply swallowed.
 
