@@ -175,19 +175,32 @@ function reportEnvironment() {
 
 async function pair() {
   const created = await fetch("/api/session", { method: "POST" }).then((r) => r.json());
-  el("pair").textContent = created.code;
-  log(`Pairing session ${created.code}. On your phone open: ${created.activateUrl}`, "warn");
 
-  const deadline = Date.now() + 5 * 60 * 1000;
+  // Only the user_code is ever shown. The device_code is a credential: it is
+  // held in this closure, sent only as a bearer header, and never rendered.
+  el("pair").textContent = created.user_code;
+  log(`Pairing session ${created.user_code}. On your phone open: ${created.activate_url}`, "warn");
+
+  const intervalMs = (created.interval || 2) * 1000;
+  const deadline = Date.now() + created.expires_in * 1000;
+
   while (Date.now() < deadline) {
-    const session = await fetch(`/api/session/${created.code}`).then((r) => r.json());
+    const response = await fetch("/api/session/token", {
+      headers: { Authorization: `Bearer ${created.device_code}` },
+    });
+
+    if (response.status === 404) throw new Error("The pairing session expired.");
+    if (response.status === 429) throw new Error("Rate limited by the pairing server.");
+    if (!response.ok) throw new Error(`Session poll failed: HTTP ${response.status}`);
+
+    const session = await response.json();
     if (session.status === "authorized" && session.musicUserToken) {
       log("Phone authorized. Music User Token received (not printed).", "ok");
       return session.musicUserToken;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new Error("Pairing timed out after 5 minutes.");
+  throw new Error(`Pairing timed out after ${created.expires_in} seconds.`);
 }
 
 /* ---------------------------------------------------------------- *

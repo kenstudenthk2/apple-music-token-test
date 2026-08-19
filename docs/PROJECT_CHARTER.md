@@ -93,6 +93,7 @@ Every gate has a PASS criterion that a person or script can check mechanically. 
   4. Pairing sessions expire ≤300 s after creation and codes are single-use.
 - Plus: `git ls-files` returns zero matches for `*.p8`, `.env`, or any Music User Token literal.
 - **FAIL**: any of the four tests failing, or any secret found tracked in git.
+- **Status**: ✅ **PASSED** (2026-08-19). `pairing-server.test.js` — 14 tests, all four criteria — passes, and every one of them failed against the previous server first, which is the evidence the vulnerability was real. `user_code` and `device_code` are now separate: no route returns a Music User Token in response to a `user_code`. See `docs/decisions/ESCALATION-002-pairing-security-design.md`.
 
 ### G3 — TV UI Prototype (design frames the user can SEE)
 - **PASS**: clickable/navigable HTML prototype (no backend required) covering all 5 screens — Pairing/QR, Library Home, Playlist/Album detail, Search, Now Playing — rendered at 1920×1080, delivered as an Artifact URL **and** screenshots in `docs/ui/`. Human user views it and records a decision.

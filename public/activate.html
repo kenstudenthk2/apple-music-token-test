@@ -89,11 +89,20 @@
             throw new Error("Apple returned an empty Music User Token.");
           }
 
-          const response = await fetch(`/api/session/${code}/token`, {
+          // Hands the token to the pairing server against the user_code — the
+          // only code this page has ever seen. The response is 204 with no
+          // body: this endpoint never returns a token, so it cannot leak one.
+          const response = await fetch(`/api/activate/${code}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ musicUserToken }),
           });
+          if (response.status === 404) {
+            throw new Error("That pairing code has expired. Start again on your TV.");
+          }
+          if (response.status === 429) {
+            throw new Error("Too many attempts. Wait a minute and try again.");
+          }
           if (!response.ok) {
             const body = await response.json().catch(() => ({}));
             throw new Error(body.error || `HTTP ${response.status}`);

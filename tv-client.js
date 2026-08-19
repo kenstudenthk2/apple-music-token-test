@@ -39,8 +39,15 @@ async function requestSession(fetchImpl = fetch) {
   return response.json();
 }
 
+/**
+ * Poll for the token using the device_code.
+ *
+ * The user_code is never sent here — it is only ever shown on screen. The
+ * device_code is the sole credential that can retrieve a Music User Token, and
+ * it never leaves this process except as an Authorization header over TLS.
+ */
 async function waitForAuthorization({
-  code,
+  deviceCode,
   fetchImpl = fetch,
   log = console.log,
   timeoutMs = POLL_TIMEOUT_MS,
@@ -50,14 +57,25 @@ async function waitForAuthorization({
   const deadline = now() + timeoutMs;
 
   while (now() < deadline) {
-    const response = await fetchImpl(`${BASE_URL}/api/session/${code}`);
+    const response = await fetchImpl(`${BASE_URL}/api/session/token`, {
+      headers: { Authorization: `Bearer ${deviceCode}` },
+    });
+
+    if (response.status === 429) {
+      throw new Error("Rate limited. Too many failed attempts from this address.");
+    }
+    if (response.status === 404) {
+      throw new Error("The pairing session expired. Start a new one.");
+    }
     if (!response.ok) {
-      throw new Error(`Session lookup failed: HTTP ${response.status}`);
+      throw new Error(`Session poll failed: HTTP ${response.status}`);
     }
 
     const session = await response.json();
     if (session.status === "authorized") {
       log("Authorized.");
+      // Collected. The server has destroyed the session, so this device_code
+      // is now worthless — do not retry with it.
       return session.musicUserToken;
     }
 
@@ -107,14 +125,20 @@ async function main() {
     privateKeyPem,
   });
 
-  const { code, activateUrl } = await requestSession();
+  const session = await requestSession();
   console.log("");
-  console.log(`  Pairing code: ${code}`);
-  console.log(`  Open on your phone/browser: ${activateUrl}`);
+  // Only the user_code is ever printed. The device_code is a credential and is
+  // never displayed, logged, or written down.
+  console.log(`  Pairing code: ${session.user_code}`);
+  console.log(`  Open on your phone/browser: ${session.activate_url}`);
+  console.log(`  Expires in ${session.expires_in}s`);
   console.log("");
   console.log("Waiting for authorization…");
 
-  const musicUserToken = await waitForAuthorization({ code });
+  const musicUserToken = await waitForAuthorization({
+    deviceCode: session.device_code,
+    intervalMs: (session.interval || 2) * 1000,
+  });
   await readLibraryPlaylists({ developerToken, musicUserToken });
 }
 
