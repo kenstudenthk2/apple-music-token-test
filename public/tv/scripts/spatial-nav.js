@@ -164,15 +164,56 @@ function groupOf(el) {
  * Geometry
  * ------------------------------------------------------------------ */
 
+/**
+ * The element's LAYOUT box, with its own scale undone.
+ *
+ * Navigation must not be steered by focus decoration. The focused element is
+ * scaled up, and once a design gave that scale `transform-origin: center
+ * bottom`, the focused tile's painted top rose ~28px above its own row — so its
+ * horizontal neighbours became, geometrically, "below" it. Pressing DOWN then
+ * stepped sideways along the row instead of dropping to the next shelf.
+ *
+ * Only the element's OWN transform is removed. Transforms on ancestors (the
+ * shelf stack, the row) move every candidate together and must be kept, or
+ * nothing would line up.
+ *
+ * Given a scale s about origin o, the painted edge is  r = L + o(1 - s),
+ * so the layout edge is  L = r - o(1 - s), and the layout size is  r.size / s.
+ */
 function boxOf(el) {
   const r = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+
+  let left = r.left;
+  let top = r.top;
+  let width = r.width;
+  let height = r.height;
+
+  if (style.transform && style.transform !== 'none') {
+    const m = style.transform.match(/matrix\(([^)]+)\)/);
+    if (m) {
+      const parts = m[1].split(',').map(parseFloat);
+      const sx = parts[0] || 1;
+      const sy = parts[3] || 1;
+      if (sx !== 1 || sy !== 1) {
+        const origin = style.transformOrigin.split(' ').map(parseFloat);
+        const ox = origin[0] || 0;
+        const oy = origin[1] || 0;
+        left = r.left - ox * (1 - sx);
+        top = r.top - oy * (1 - sy);
+        width = r.width / sx;
+        height = r.height / sy;
+      }
+    }
+  }
+
   return {
-    left: r.left,
-    right: r.right,
-    top: r.top,
-    bottom: r.bottom,
-    cx: r.left + r.width / 2,
-    cy: r.top + r.height / 2,
+    left,
+    right: left + width,
+    top,
+    bottom: top + height,
+    cx: left + width / 2,
+    cy: top + height / 2,
   };
 }
 

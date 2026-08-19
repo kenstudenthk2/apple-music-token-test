@@ -218,6 +218,49 @@ async function checkNoFocusTrap(events = 200) {
 
 
 /* ------------------------------------------------------------------ *
+ * Vertical movement must actually be vertical
+ * ------------------------------------------------------------------ */
+
+/**
+ * DOWN must leave the row.
+ *
+ * The regression this guards: the focus scale used `transform-origin: center
+ * bottom`, so the focused tile's PAINTED top rose above its own row and its
+ * horizontal neighbours became, geometrically, "below" it. Pressing DOWN then
+ * stepped sideways along the row — left, right, left, right — instead of
+ * dropping to the next shelf. Navigation now measures the layout box with the
+ * element's own transform undone.
+ */
+async function checkVerticalIsVertical() {
+  const start = focused();
+  if (!start) {
+    record("down-leaves-the-row", false, "nothing was focused to start from");
+    return;
+  }
+  const startRow = start.parentElement;
+
+  press("down");
+  const after = focused();
+  const sameRow = after && after.parentElement === startRow;
+
+  record(
+    "down-leaves-the-row",
+    !sameRow,
+    sameRow
+      ? `DOWN moved to a sibling in the same row (${label(after)}) — focus decoration is steering navigation`
+      : `DOWN left the row, as it must`
+  );
+
+  // And the column should survive the move: dropping a shelf should not also
+  // slide sideways.
+  if (!sameRow && after) {
+    const drift = Math.abs(after.getBoundingClientRect().left - start.getBoundingClientRect().left);
+    record("down-keeps-the-column", drift < 40, `${drift.toFixed(0)}px horizontal drift`);
+  }
+}
+
+
+/* ------------------------------------------------------------------ *
  * Criterion 3 — the BACK contract, both paths (VOTE-003)
  * ------------------------------------------------------------------ */
 
@@ -395,6 +438,7 @@ async function run() {
   press("back");
   await wait(400);
 
+  await checkVerticalIsVertical();
   await checkNoFocusTrap(200);
   await checkBackContract();
 
