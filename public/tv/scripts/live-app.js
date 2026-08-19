@@ -15,6 +15,7 @@
 import { createClient, artworkUrl } from "./api.js";
 import { createPlayer } from "./player.js";
 import { init, focus, onBack, refresh } from "./spatial-nav.js";
+import { draw as drawQr } from "./qr.js";
 
 const el = (id) => document.getElementById(id);
 const mmss = (s) => `${Math.floor((s || 0) / 60)}:${String(Math.floor(s || 0) % 60).padStart(2, "0")}`;
@@ -93,13 +94,26 @@ function applyPalette(item) {
   }
 }
 
-/** Build an <img> as a node. Artwork URLs are data; never interpolate them. */
+/**
+ * Build an <img> as a node. Artwork URLs are data; never interpolate them.
+ *
+ * Deliberately NOT lazy-loaded. Shelves are moved with transforms, and the
+ * viewport intersection that drives lazy loading does not follow a transformed
+ * ancestor reliably — tiles to the right and below simply never loaded their
+ * artwork. Forty-eight covers at tile size is a small price for artwork that
+ * predictably appears, and predictability is worth more on a television than
+ * saved bandwidth.
+ *
+ * A failed load removes the element rather than leaving a broken-image glyph;
+ * the tile's own surface colour is a perfectly good placeholder.
+ */
 function artNode(item, size) {
   const url = artworkUrl(item?.artwork, size * (window.devicePixelRatio || 1));
   if (!url) return null;
   const img = document.createElement("img");
   img.alt = "";
-  img.loading = "lazy";
+  img.decoding = "async";
+  img.addEventListener("error", () => img.remove(), { once: true });
   img.src = url;
   return img;
 }
@@ -523,6 +537,19 @@ async function obtainUserToken() {
   el("boot-title").textContent = "Scan to connect";
   el("boot-url").textContent = session.activate_url;
   el("boot-code").textContent = session.user_code;
+
+  // A real, scannable code. The prototype drew a placeholder pattern that could
+  // never scan, and the first live build had no QR at all — the screen said
+  // "scan to connect" and gave the viewer nothing to scan.
+  try {
+    drawQr(el("boot-qr"), session.activate_url);
+    el("boot-qr-panel").hidden = false;
+  } catch (error) {
+    // A code that will not render must not hide the URL underneath it.
+    el("boot-qr-panel").hidden = true;
+    console.error("[live] QR render failed", error);
+  }
+
   status("Waiting for your phone…");
 
   const deadline = Date.now() + session.expires_in * 1000;

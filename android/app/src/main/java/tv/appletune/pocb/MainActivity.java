@@ -190,13 +190,39 @@ public class MainActivity extends Activity {
         web.setVisibility(View.GONE);
     }
 
+    /**
+     * Give the page first refusal on BACK.
+     *
+     * A hardware BACK press does not produce a DOM keydown — Android routes it
+     * straight here. So every back handler the web app registers is invisible
+     * to the remote, and the previous version of this method went directly to
+     * WebView history: from Now Playing, BACK left the app's own screen stack
+     * entirely and reloaded the previous page. The automated D-pad audit missed
+     * it completely, because a synthetic Escape event does reach the page.
+     *
+     * The page answers synchronously via __onAndroidBack; only if it declines
+     * do we fall back to history, and then to leaving the app.
+     */
     @Override
     public void onBackPressed() {
-        if (web.getVisibility() == View.VISIBLE && web.canGoBack()) {
-            web.goBack();
+        if (web == null || web.getVisibility() != View.VISIBLE) {
+            super.onBackPressed();
             return;
         }
-        super.onBackPressed();
+
+        web.evaluateJavascript(
+                "(function(){try{return !!(window.__onAndroidBack && window.__onAndroidBack())}"
+                        + "catch(e){return false}})()",
+                value -> {
+                    if ("true".equals(value)) {
+                        return; // The page consumed it.
+                    }
+                    if (web.canGoBack()) {
+                        web.goBack();
+                    } else {
+                        finish();
+                    }
+                });
     }
 
     @Override

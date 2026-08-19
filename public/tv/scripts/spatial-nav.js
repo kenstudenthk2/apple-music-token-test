@@ -565,6 +565,23 @@ function init(root) {
     attributeFilter: ['data-focusable', 'data-focus-disabled', 'hidden', 'style', 'class'] });
 
   if (!state.current || !isNavigable(state.current)) focusFirst();
+
+  /*
+   * Bridge for the Android host.
+   *
+   * A hardware BACK press on Android does NOT produce a DOM keydown — it goes
+   * straight to Activity.onBackPressed(). Every back handler registered here
+   * would therefore never run on a real remote, while a synthetic Escape in a
+   * test passes happily. That gap is exactly what shipped: the G4 audit was
+   * green and BACK did nothing on the device.
+   *
+   * MainActivity calls this first and only falls back to WebView history when
+   * it returns false.
+   */
+  window.__onAndroidBack = function () {
+    return handleBack(null) === true;
+  };
+
   return api;
 }
 
@@ -595,6 +612,7 @@ function refresh() {
 
 /** Tear down listeners — for hot reload and tests. */
 function destroy() {
+  if (window.__onAndroidBack) delete window.__onAndroidBack;
   if (state.bound) {
     window.removeEventListener('keydown', onKeyDown, true);
     state.bound = false;

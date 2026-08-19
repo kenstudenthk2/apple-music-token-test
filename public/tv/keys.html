@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppleTune TV — Remote key probe</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<style>
+  /*
+    A measuring instrument, not a screen.
+    Its job is to turn "the direction buttons feel wrong" into a number.
+  */
+  body { padding: 4vh 4vw; }
+  h1 { font-size: var(--fs-title-lg); margin: 0 0 .2em; }
+  .sub { color: var(--text-tertiary); font-size: var(--fs-body); margin: 0 0 1em; }
+
+  #last {
+    background: var(--surface-2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-4);
+  }
+  #last .code {
+    font-family: var(--font-num);
+    font-size: 4rem;
+    font-weight: var(--fw-bold);
+    color: var(--art-accent);
+    line-height: 1;
+  }
+  #last .name { font-size: var(--fs-title); color: var(--text-primary); }
+  #last .verdict { font-size: var(--fs-body-lg); margin-top: .3em; }
+  .known { color: var(--success); }
+  .unknown { color: var(--danger); }
+
+  .grid { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+  .chip {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    color: var(--text-tertiary);
+    font-size: var(--fs-body);
+  }
+  .chip[data-seen="true"] { background: var(--success); color: #04240D; font-weight: var(--fw-semibold); }
+
+  #log {
+    background: #08080C;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    height: 34vh;
+    overflow-y: auto;
+    font-family: var(--font-num);
+    font-size: var(--fs-caption);
+    color: var(--text-secondary);
+  }
+  #log div { padding: .1em 0; }
+  #ua { margin-top: var(--space-3); font-size: var(--fs-caption); color: var(--text-tertiary); word-break: break-all; }
+</style>
+</head>
+<body>
+
+<h1>Remote key probe</h1>
+<p class="sub">Press every button on the remote, including the ones that seem broken. Nothing here navigates — the page only measures.</p>
+
+<div id="last">
+  <div class="code" id="last-code">—</div>
+  <div class="name" id="last-name">Press a button</div>
+  <div class="verdict" id="last-verdict"></div>
+</div>
+
+<div class="grid" id="expected"></div>
+
+<div id="log"></div>
+<div id="ua"></div>
+
+<script>
+/*
+ * The keycodes spatial-nav.js actually recognises. If a remote sends something
+ * else, the app ignores that button entirely — and no automated audit can find
+ * that, because synthetic events always carry the code the test author chose.
+ */
+const KNOWN = {
+  37: "LEFT",
+  38: "UP",
+  39: "RIGHT",
+  40: "DOWN",
+  13: "OK / Enter",
+  27: "BACK (Esc)",
+  461: "BACK (webOS)",
+  10009: "BACK (Tizen)",
+  179: "PLAY/PAUSE",
+  178: "STOP",
+  228: "REWIND",
+  227: "FAST FORWARD",
+};
+
+/** What we need to see at least once for the app to be fully operable. */
+const REQUIRED = [37, 38, 39, 40, 13];
+
+const seen = new Set();
+const counts = new Map();
+
+const chips = document.getElementById("expected");
+for (const code of REQUIRED) {
+  const chip = document.createElement("span");
+  chip.className = "chip";
+  chip.id = `chip-${code}`;
+  chip.textContent = `${KNOWN[code]} (${code})`;
+  chips.appendChild(chip);
+}
+
+document.getElementById("ua").textContent = navigator.userAgent;
+
+function log(line, className) {
+  const node = document.createElement("div");
+  if (className) node.className = className;
+  node.textContent = line;
+  const box = document.getElementById("log");
+  box.insertBefore(node, box.firstChild);
+  while (box.childElementCount > 200) box.removeChild(box.lastChild);
+}
+
+window.addEventListener("keydown", (event) => {
+  // Stop the platform acting on anything, so a stray BACK does not leave the
+  // page mid-measurement.
+  event.preventDefault();
+
+  const code = event.keyCode || event.which || 0;
+  const label = KNOWN[code];
+  const times = (counts.get(code) || 0) + 1;
+  counts.set(code, times);
+
+  document.getElementById("last-code").textContent = String(code);
+  document.getElementById("last-name").textContent =
+    `key="${event.key}"  code="${event.code || "(none)"}"${times > 1 ? `  ×${times}` : ""}`;
+
+  const verdict = document.getElementById("last-verdict");
+  if (label) {
+    verdict.textContent = `Recognised as ${label}`;
+    verdict.className = "verdict known";
+    seen.add(code);
+    const chip = document.getElementById(`chip-${code}`);
+    if (chip) chip.dataset.seen = "true";
+  } else {
+    verdict.textContent = "NOT RECOGNISED — the app ignores this button";
+    verdict.className = "verdict unknown";
+  }
+
+  log(
+    `${String(code).padStart(6)}  key=${event.key}  code=${event.code || "-"}  ${label || "UNKNOWN"}`,
+    label ? "known" : "unknown"
+  );
+}, true);
+
+// Some TV remotes deliver media buttons through the Media Session API rather
+// than as key events. If that is happening, the key log stays empty while these
+// fire, which is itself the answer.
+if ("mediaSession" in navigator) {
+  for (const action of ["play", "pause", "nexttrack", "previoustrack"]) {
+    try {
+      navigator.mediaSession.setActionHandler(action, () =>
+        log(`mediaSession: ${action}  (arrived WITHOUT a key event)`, "known"));
+    } catch (error) {
+      /* not every action is supported everywhere */
+    }
+  }
+}
+</script>
+</body>
+</html>

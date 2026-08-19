@@ -26,6 +26,14 @@
   .boot__url { font-size: var(--fs-title-sm); color: var(--text-primary); }
   .boot__status { font-size: var(--fs-body-lg); color: var(--text-tertiary); }
   .boot__error { color: var(--danger); }
+  .boot__main {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: var(--space-8);
+  }
+  /* A QR must be true white with a quiet zone, or readers will not lock on. */
+  #boot-qr { width: 100%; height: 100%; image-rendering: pixelated; }
 
   /* Real artwork, unlike the prototype's CSS gradients. */
   .tile__art img,
@@ -49,11 +57,19 @@
   <!-- ============================================================ SCREEN: BOOT -->
   <section class="screen" data-screen="boot" data-active="true">
     <div class="boot">
-      <div class="pair__eyebrow">AppleTune TV</div>
-      <h1 class="pair__headline" id="boot-title">Connecting…</h1>
-      <div class="boot__url" id="boot-url"></div>
-      <div class="boot__code" id="boot-code"></div>
-      <div class="boot__status" id="boot-status">Starting up.</div>
+      <div class="boot__main">
+        <div>
+          <div class="pair__eyebrow">AppleTune TV</div>
+          <h1 class="pair__headline" id="boot-title">Connecting…</h1>
+          <div class="boot__url" id="boot-url"></div>
+          <div class="boot__code" id="boot-code"></div>
+          <div class="boot__status" id="boot-status">Starting up.</div>
+        </div>
+
+        <div class="pair__panel" id="boot-qr-panel" hidden>
+          <div class="pair__qr"><canvas id="boot-qr"></canvas></div>
+        </div>
+      </div>
     </div>
   </section>
 
