@@ -371,8 +371,26 @@ function libraryTile(item, kind, index) {
   node.dataset.focusable = "";
   node.dataset.kind = kind;
   node.dataset.action = kind === "artist" ? "noop" : "detail";
-  node.dataset.enter = "1";
   node.dataset.index = String(index);
+
+  /*
+   * The entry animation opts IN, and opts out again when it is done.
+   *
+   * `animation-fill-mode: both` makes an animation's final value outrank every
+   * style rule for as long as the animation is attached. Leaving data-enter on
+   * meant the keyframe's `translate3d(0,0,0)` permanently beat the focus rule's
+   * scale — the focused tile stopped growing at all, and navigation was reading
+   * geometry that no longer matched what the design intended.
+   *
+   * Only the first six tiles animate, as the stylesheet's own note specifies;
+   * beyond that the stagger is invisible and the cost is not.
+   */
+  if (index < 6) {
+    node.dataset.enter = "1";
+    node.addEventListener("animationend", () => {
+      node.removeAttribute("data-enter");
+    }, { once: true });
+  }
   // Read once per tile by the entry stagger; never re-read.
   node.style.setProperty("--i", String(index));
 

@@ -177,8 +177,15 @@ function groupOf(el) {
  * shelf stack, the row) move every candidate together and must be kept, or
  * nothing would line up.
  *
- * Given a scale s about origin o, the painted edge is  r = L + o(1 - s),
- * so the layout edge is  L = r - o(1 - s), and the layout size is  r.size / s.
+ * The element's own transform may translate as well as scale — the focus rule
+ * lifts the tile as it grows. Solving for the layout edge L, with origin offset
+ * o, scale s and translation t:
+ *
+ *     painted = L + o(1 - s) + t
+ *     L       = painted - o(1 - s) - t
+ *
+ * Dropping the translation term left a 10.8px error, which is more than enough
+ * to put a horizontal neighbour "below" the focused tile again.
  */
 function boxOf(el) {
   const r = el.getBoundingClientRect();
@@ -195,12 +202,14 @@ function boxOf(el) {
       const parts = m[1].split(',').map(parseFloat);
       const sx = parts[0] || 1;
       const sy = parts[3] || 1;
-      if (sx !== 1 || sy !== 1) {
+      const tx = parts[4] || 0;
+      const ty = parts[5] || 0;
+      if (sx !== 1 || sy !== 1 || tx !== 0 || ty !== 0) {
         const origin = style.transformOrigin.split(' ').map(parseFloat);
         const ox = origin[0] || 0;
         const oy = origin[1] || 0;
-        left = r.left - ox * (1 - sx);
-        top = r.top - oy * (1 - sy);
+        left = r.left - ox * (1 - sx) - tx;
+        top = r.top - oy * (1 - sy) - ty;
         width = r.width / sx;
         height = r.height / sy;
       }
