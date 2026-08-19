@@ -247,6 +247,10 @@
    -------------------------------------------------------------------------- */
 .screen[data-screen="home"] {
   --lib-tile: var(--tile-size);
+  /* And its own spacing. Library widens the gap because 240px tiles need more
+     air between them; Home's 288px tiles do not, and silently loosening a
+     screen nobody asked to change is how a redesign turns into a regression. */
+  --lib-gap: var(--tile-gap);
 }
 
 .tile {
