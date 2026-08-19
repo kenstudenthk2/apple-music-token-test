@@ -220,11 +220,15 @@ async function handleRequest(req, res, developerToken) {
   sendJson(res, 404, { error: "Not found." });
 }
 
-function main() {
-  loadEnvFile();
-  const developerToken = buildDeveloperToken();
-
-  const server = http.createServer((req, res) => {
+/**
+ * Build the HTTP server around a developer token.
+ *
+ * Split out of main() so tests can drive the real request handler over a real
+ * socket with a fake token, rather than needing the Apple .p8 private key on
+ * the machine running them.
+ */
+function createServer(developerToken) {
+  return http.createServer((req, res) => {
     handleRequest(req, res, developerToken).catch((error) => {
       console.error(`[pairing] ${error.message}`);
       if (!res.headersSent) {
@@ -232,6 +236,11 @@ function main() {
       }
     });
   });
+}
+
+function main() {
+  loadEnvFile();
+  const server = createServer(buildDeveloperToken());
 
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`Pairing server listening on http://localhost:${PORT}`);
@@ -243,4 +252,11 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { createSession, generateCode, sessions, sweepExpiredSessions };
+module.exports = {
+  SESSION_TTL_MS,
+  createServer,
+  createSession,
+  generateCode,
+  sessions,
+  sweepExpiredSessions,
+};
