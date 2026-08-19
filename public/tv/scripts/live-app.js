@@ -107,18 +107,82 @@ function applyPalette(item) {
  * A failed load removes the element rather than leaving a broken-image glyph;
  * the tile's own surface colour is a perfectly good placeholder.
  */
+/* ------------------------------------------------------------------ *
+ * Artwork diagnostics (?diag=1)
+ *
+ * "Some covers do not load" cannot be debugged from a sofa, and logcat needs
+ * adb set up. This records every attempt and draws the result on the
+ * television, so the answer is a photograph rather than another guess.
+ * ------------------------------------------------------------------ */
+const DIAG = new URLSearchParams(location.search).get("diag") === "1";
+const artworkLog = [];
+
+function renderDiag() {
+  if (!DIAG) return;
+  let panel = el("diag");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "diag";
+    panel.style.cssText =
+      "position:fixed;left:2vw;top:2vh;width:96vw;max-height:96vh;overflow:auto;z-index:9999;" +
+      "background:#06060Aee;color:#F5F6F8;font:1vw/1.4 ui-monospace,Consolas,monospace;" +
+      "padding:1.5vh 1.5vw;border-radius:8px";
+    document.body.appendChild(panel);
+  }
+
+  const failed = artworkLog.filter((a) => a.status === "FAIL");
+  const pending = artworkLog.filter((a) => a.status === "…");
+  const loaded = artworkLog.length - failed.length - pending.length;
+
+  panel.textContent = "";
+  const head = document.createElement("div");
+  head.style.cssText = "font-size:1.6vw;font-weight:700;margin-bottom:.6em";
+  head.textContent = `Artwork: ${loaded} loaded · ${failed.length} failed · ${pending.length} pending`;
+  panel.appendChild(head);
+
+  // Failures first — nobody photographs the successes.
+  const ordered = [...failed, ...artworkLog.filter((a) => a.status !== "FAIL")];
+  for (const entry of ordered.slice(0, 40)) {
+    const row = document.createElement("div");
+    row.style.color = entry.status === "FAIL" ? "#FF453A" : "#9AA0AA";
+    row.style.padding = ".15em 0";
+    row.style.wordBreak = "break-all";
+    row.textContent = `${entry.status}  ${entry.title}  ${entry.url}`;
+    panel.appendChild(row);
+  }
+}
+
 function artNode(item, size) {
   const url = artworkUrl(item?.artwork, size * (window.devicePixelRatio || 1));
-  if (!url) return null;
+  if (!url) {
+    if (DIAG && item) {
+      artworkLog.push({
+        status: "NONE",
+        title: (item.title || "").slice(0, 24),
+        url: "(the API returned no artwork for this item)",
+      });
+      renderDiag();
+    }
+    return null;
+  }
+
+  const entry = { status: "…", title: (item?.title || "").slice(0, 24), url };
+  if (DIAG) artworkLog.push(entry);
+
   const img = document.createElement("img");
   img.alt = "";
   img.decoding = "async";
   img.addEventListener("error", () => {
-    // Say which URL failed. MainActivity mirrors console output into logcat, so
-    // "some covers do not load" becomes a specific URL to look at rather than a
-    // pattern someone has to guess at from the sofa.
+    // Named, not counted. MainActivity mirrors console output into logcat, and
+    // ?diag=1 puts the same thing on screen for anyone without adb.
     console.warn(`[live] artwork failed: ${url}`);
+    entry.status = "FAIL";
+    renderDiag();
     img.remove();
+  }, { once: true });
+  img.addEventListener("load", () => {
+    entry.status = "OK";
+    renderDiag();
   }, { once: true });
   img.src = url;
   return img;
