@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Now Playing V2 — preview</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+<link rel="stylesheet" href="styles/now-playing-v2.css">
+<style>
+  /*
+    Preview harness only. Nothing here ships — it exists so the redesign can be
+    judged on a television before it replaces the screen people are using.
+    Fake artwork is drawn as a gradient so the page needs no network.
+  */
+  .preview-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5vh;
+    transform: translateX(-50%);
+    font-size: var(--fs-caption);
+    color: var(--text-tertiary);
+    display: flex;
+    gap: var(--space-4);
+    z-index: 9999;
+  }
+  .preview-hint kbd {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: .1em .5em;
+    margin-right: .4em;
+    color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+
+<section class="now" id="now" data-state="stopped" data-idle="false" data-chrome="shown">
+  <div class="now__bloom"></div>
+  <div class="now__scrim"></div>
+
+  <div class="now__body">
+    <div class="now__stage">
+      <div class="now__sleeve">
+        <div class="now__sleeve-art" id="sleeve"></div>
+      </div>
+
+      <div class="now__disc">
+        <div class="now__platter">
+          <div class="now__vinyl">
+            <div class="now__swirl"></div>
+            <!--
+              The label is a CHILD of the vinyl, not a sibling. The continuous
+              `spin` animation lives on .now__vinyl, so a sibling label would sit
+              perfectly still while the record turned underneath it — which is
+              exactly the thing a real record never does. .now__platter still
+              wraps both and carries the spin-up and spin-down rotation on top.
+            -->
+            <div class="now__label" id="label">
+              <span class="now__label-line">Apple Music</span>
+            </div>
+          </div>
+        </div>
+        <div class="now__sheen"></div>
+      </div>
+
+      <div class="now__tonearm">
+        <span class="now__tonearm-weight"></span>
+        <span class="now__tonearm-head"></span>
+      </div>
+    </div>
+
+    <div class="now__meta">
+      <div class="now__eyebrow">Playing from Recently Played</div>
+      <h1 class="now__title">Neon Harbour</h1>
+      <p class="now__artist">Yuen Kwok</p>
+      <p class="now__album">Neon Harbour · 2024</p>
+    </div>
+
+    <div class="now__transport">
+      <div class="now__scrub">
+        <span id="elapsed">0:00</span>
+        <span class="now__bar"><span class="now__fill" id="fill"></span></span>
+        <span id="total">3:38</span>
+      </div>
+      <div class="now__buttons" data-focus-group="transport">
+        <div class="control focusable" data-size="sm" data-focusable data-action="prev">⏮</div>
+        <div class="control focusable" data-size="sm" data-focusable data-action="playpause"
+             data-primary="true" id="playpause">▶</div>
+        <div class="control focusable" data-size="sm" data-focusable data-action="next">⏭</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="now__dim"></div>
+</section>
+
+<div class="preview-hint">
+  <span><kbd>OK</kbd>Play / pause</span>
+  <span><kbd>◀ ▶</kbd>Move focus</span>
+  <span><kbd>I</kbd>Force idle mode</span>
+</div>
+
+<script type="module" src="scripts/now-v2-preview.js"></script>
+</body>
+</html>

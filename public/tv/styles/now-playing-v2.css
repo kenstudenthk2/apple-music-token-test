@@ -1,0 +1,745 @@
+/* ==========================================================================
+   AppleTune TV — NOW PLAYING V2  "The Record Is Actually Playing"
+   Spec: docs/design/NOW_PLAYING_V2.md
+   Load AFTER tokens.css and app.css. Replaces the .now__* block in app.css.
+
+   PERFORMANCE CONTRACT (tokens.css §MOTION) — obeyed throughout:
+     ANIMATED HERE  ->  transform, opacity. Nothing else. Ever.
+     NEVER ANIMATED ->  width, height, top, left, box-shadow, filter,
+                        background-color, border-radius.
+   Concurrent animated layers: 2 continuous while playing, 6 peak for <=1.4s
+   during the PLAY transition, 3 while idle. Budget is 6. See spec §3.
+
+   NEW ELEMENTS the markup must add (spec §8):
+     .now__stage  .now__sleeve  .now__sleeve-art  .now__platter  .now__swirl
+     .now__sheen  .now__tonearm  .now__tonearm-weight  .now__tonearm-head
+     .now__dim
+   Existing names kept: .now .now__bloom .now__scrim .now__body .now__disc
+     .now__vinyl .now__label .now__meta .now__transport .now__scrub .now__bar
+     .now__fill .now__buttons
+   ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   0. COMPONENT TOKENS
+   Everything derives from tokens.css. The four exceptions below are physical
+   MATERIALS, not UI colours — a pressed vinyl record is the darkest object on
+   the screen and must separate from --surface-0 (#0B0B10), which no existing
+   surface token can do because surface-0 is the floor of that ramp.
+   -------------------------------------------------------------------------- */
+.now {
+  /* --- geometry --- */
+  /* 52vh overflowed: it is measured against the whole viewport, but the disc
+     only gets what is left after the safe area, the transport and the row
+     gap. The stage then centred itself outside its grid row and the top of
+     the record crossed the overscan boundary, where a television may crop
+     it. Verified empirically rather than derived. */
+  --disc: min(34rem, 44vh);        /* 544px @1080p — the master dimension    */
+  --sleeve: min(26rem, 40vh);      /* 416px — full square artwork            */
+  --sleeve-overlap: 0.45;          /* unitless: how much of the record is
+                                      still inside the sleeve. Not a % — old
+                                      TV Chromium cannot divide percentages. */
+  --label-inset: 32%;              /* -> label = 36% of disc = 196px (real
+                                      LP: 100mm label on a 302mm disc)       */
+  --spindle-on-label: 6.6%;        /* 6.6% of a 36% label = 2.4% of the disc
+                                      = 13px @1080p (real spindle: 7.2mm)    */
+  --groove-pitch: 0.25rem;         /* 4px. Below 3px a 720p panel moires.    */
+  --land-pitch: 1.75rem;           /* 28px — the lighter inter-track bands   */
+  --groove-outer: 96.5%;           /* lead-in groove, 292mm of 302mm         */
+  --groove-inner: 39.5%;           /* run-out begins, 120mm of 302mm         */
+
+  /* --- rotation --- */
+  --rpm-period: 1.8s;              /* 33 1/3 RPM. Use 1.333s for a 45.       */
+  --spinup-dur: 1000ms;
+  --brake-dur: 1800ms;
+  /* Initial slope y1/x1 = 1.82 /s; x 110deg = 200 deg/s, which exactly
+     cancels the inner spin's 200 deg/s. Net velocity starts at zero. */
+  --ease-spinup: cubic-bezier(0.33, 0.60, 0.20, 1.00);
+  /* Terminal slope (1-y2)/(1-x2) = 2.0; x 180deg / 1.8s = 200 deg/s, which
+     cancels the inner spin at the LAST frame. The disc stops dead, no snap.
+     Initial slope is 0, so braking also begins without a discontinuity. */
+  --ease-brake: cubic-bezier(0.35, 0.00, 0.70, 0.40);
+
+  /* --- tonearm --- */
+  --arm-len: calc(var(--disc) * 0.66);   /* 359px */
+  --arm-park: -32deg;
+  --arm-lead-in: 6deg;
+  --arm-travel: 18deg;                   /* lead-in 6deg -> run-out 24deg    */
+  --now-arm-track: 0;                    /* JS writes 0..1 once per second   */
+  --arm-cue-in: 1400ms;
+  --arm-cue-out: 900ms;
+
+  /* --- progress --- */
+  --now-progress: 0;                     /* JS writes 0..1 once per second   */
+
+  /* --- MATERIALS (the only literal colours in this file) --- */
+  --vinyl-edge:  #050508;  /* Below every surface token on purpose: the rim of
+                              a record must read darker than --surface-0 or the
+                              disc dissolves into the page background.        */
+  --vinyl-body:  #16161C;  /* Lit face of the pressing. Sits between
+                              --surface-1 and --surface-2, carrying the same
+                              blue-violet cast as the surface ramp.           */
+  --vinyl-lift:  #26262F;  /* Key-lit upper-left quadrant of the disc.        */
+  --groove-sheen: rgba(255, 255, 255, 0.06); /* light caught in a groove wall.
+                              Same idiom and value family as
+                              --surface-hairline (0.08); slightly lower so 120
+                              stacked rings do not grey the disc out.         */
+
+  /* --- label (Apple supplies these; fallbacks are token-derived) --- */
+  --label-bg:  var(--surface-2);
+  --label-ink: var(--text-secondary);
+  --label-lip: rgba(255, 255, 255, 0.14); /* the 2px paper edge standing proud */
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+
+/* --------------------------------------------------------------------------
+   1. AMBIENT WASH — animated layer 1
+   Full-bleed, painted once, thereafter transform+opacity only. Deliberately
+   scaled past the frame so its soft edge never enters the safe area.
+   -------------------------------------------------------------------------- */
+.now__bloom {
+  position: absolute;
+  inset: -20%;
+  background: var(--art-bloom);
+  opacity: 0;
+  transform: scale(1) translate3d(0, 0, 0);
+  transition: opacity var(--dur-slow) var(--ease-out-soft);
+  will-change: transform, opacity;
+}
+
+.screen[data-active="true"] .now__bloom {
+  opacity: 1;
+  animation: bloom-drift 24s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes bloom-drift {
+  from { transform: scale(1.00) translate3d(0, 0, 0); }
+  to   { transform: scale(1.12) translate3d(2%, -2%, 0); }
+}
+
+/* A flat scrim so --text-tertiary keeps its measured 5.5:1 over the wash. */
+.now__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-scrim);
+}
+
+
+/* --------------------------------------------------------------------------
+   2. LAYOUT
+   The extra 1rem beyond the 5% safe inset is the reserve the idle burn-in
+   drift (§9) moves within. Without it, pixel-shift would push functional
+   content into the overscan crop.
+   -------------------------------------------------------------------------- */
+.now__body {
+  position: absolute;
+  inset: calc(var(--safe-y) + 1rem) calc(var(--safe-x) + 1rem);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  column-gap: var(--space-7);   /* 96px */
+  row-gap: var(--space-5);      /* 48px */
+  align-items: center;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Sleeve, disc and tonearm share one positioning frame so the arm's pivot is
+   anchored to the disc at every resolution. Width = sleeve + the part of the
+   record that sticks out of it. */
+.now__stage {
+  position: relative;
+  width: calc(var(--sleeve) + var(--disc) * (1 - var(--sleeve-overlap)));
+  height: var(--disc);
+  align-self: center;
+}
+
+
+/* --------------------------------------------------------------------------
+   3. THE SLEEVE
+   The full artwork, square, UNCROPPED and UNDISTORTED — Apple Identity
+   Guidelines. This is the only place the artwork is shown, which is why the
+   label (§5) is a plain paper disc rather than a circular crop.
+   Entirely static: zero animated layers.
+   -------------------------------------------------------------------------- */
+.now__sleeve {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: var(--sleeve);
+  height: var(--sleeve);
+  margin-top: calc(var(--sleeve) / -2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--elev-3), var(--rim-light);
+}
+
+.now__sleeve-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;   /* the source is already 1:1 from Apple, so this never
+                          actually crops; it only guards a malformed asset. */
+}
+
+/* The worn spine down the opening edge, and the shadow the record casts back
+   onto the card as it slides out. Static, pre-rendered. */
+.now__sleeve::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.00) 62%,
+      rgba(0, 0, 0, 0.45) 100%),
+    linear-gradient(90deg,
+      var(--surface-hairline) 0 0.125rem,
+      transparent 0.125rem);
+  pointer-events: none;
+}
+
+
+/* --------------------------------------------------------------------------
+   4. THE DISC
+   -------------------------------------------------------------------------- */
+.now__disc {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--disc);
+  height: var(--disc);
+}
+
+/* --- 4a. The inertia wrapper — animated layer 3 --------------------------
+   Carries ONLY the lagging spin-up / brake offset. It composes with the inner
+   element's constant rotation, which is how a constant-rate CSS animation is
+   made to accelerate and decelerate without ever restarting it. */
+.now__platter {
+  position: absolute;
+  inset: 0;
+  transform: rotate(0deg);
+}
+
+.now[data-state="starting"] .now__platter {
+  animation: platter-spinup var(--spinup-dur) var(--ease-spinup) forwards;
+  will-change: transform;
+}
+
+.now[data-state="stopping"] .now__platter {
+  animation: platter-brake var(--brake-dur) var(--ease-brake) forwards;
+  will-change: transform;
+}
+
+/* Holds the brake's end angle so the handover to `paused` is frame-continuous. */
+.now[data-state="paused"] .now__platter { transform: rotate(-180deg); }
+
+@keyframes platter-spinup {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-110deg); }
+}
+
+@keyframes platter-brake {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-180deg); }
+}
+
+/* --- 4b. The record — animated layer 2 -----------------------------------
+   Disc body, grooves and lands are one background stack on one element, so
+   the SoC rasterizes 544x544 exactly once and then only re-composites a
+   rotated quad for the rest of the track. */
+.now__vinyl {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    /* 1. Track-gap lands: the lighter bands a real pressing shows between
+          songs. Coarse radial scale, makes the fine grooves read as fine. */
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255, 255, 255, 0.10) 0,
+      rgba(255, 255, 255, 0.10) 0.125rem,
+      transparent 0.125rem,
+      transparent var(--land-pitch)),
+    /* 2. Groove micro-texture: ~120 rings @1080p. Rotationally symmetric, so
+          it contributes NO apparent motion — surface only. */
+    repeating-radial-gradient(circle at 50% 50%,
+      var(--groove-sheen) 0,
+      var(--groove-sheen) 0.0625rem,
+      transparent 0.0625rem,
+      transparent var(--groove-pitch)),
+    /* 3. Dead wax: a smooth, slightly brighter annulus inside the grooves. */
+    radial-gradient(circle at 50% 50%,
+      transparent 0 35%,
+      rgba(255, 255, 255, 0.05) 35% var(--groove-inner),
+      transparent var(--groove-inner)),
+    /* 4. Outer rim bevel: the flat 3mm edge land, and the hard dark lip. */
+    radial-gradient(circle at 50% 50%,
+      transparent 0 var(--groove-outer),
+      rgba(255, 255, 255, 0.09) var(--groove-outer) 99%,
+      var(--vinyl-edge) 99%),
+    /* 5. The pressing itself, key-lit from upper left. */
+    radial-gradient(circle at 30% 25%,
+      var(--vinyl-lift) 0%,
+      var(--vinyl-body) 52%,
+      var(--vinyl-edge) 100%);
+  box-shadow: var(--elev-4);
+  animation: spin var(--rpm-period) var(--ease-linear) infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+
+.now[data-state="starting"] .now__vinyl,
+.now[data-state="playing"] .now__vinyl,
+.now[data-state="stopping"] .now__vinyl { animation-play-state: running; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* --- 4c. The anisotropic swirl — THE reason the rotation is visible -------
+   Real vinyl reflects in a two-lobed bowtie, not evenly. These lobes rotate
+   WITH the record while the room light (§4d) stays fixed, so a bright band
+   sweeps beneath the highlight twice per revolution — every 0.9s at 33 1/3.
+   Concentric grooves alone are rotationally symmetric and animate to nothing;
+   this is what V1 was missing. Costs zero extra layers: it is a child of an
+   already-rotating element and rasterizes into the same texture. */
+.now__swirl {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg at 50% 50%,
+    rgba(255, 255, 255, 0.00)  0deg,
+    rgba(255, 255, 255, 0.14) 42deg,
+    rgba(255, 255, 255, 0.00) 90deg,
+    rgba(255, 255, 255, 0.00) 170deg,
+    rgba(255, 255, 255, 0.13) 222deg,
+    rgba(255, 255, 255, 0.00) 270deg,
+    rgba(255, 255, 255, 0.00) 360deg);
+  /* Confine the sheen to the grooved annulus; paper and dead wax do not
+     do this. Masks are a paint-time property, never animated. */
+  -webkit-mask-image: radial-gradient(circle at 50% 50%,
+    transparent 0 36%, #000 44% var(--groove-outer), transparent 100%);
+          mask-image: radial-gradient(circle at 50% 50%,
+    transparent 0 36%, #000 44% var(--groove-outer), transparent 100%);
+  pointer-events: none;
+}
+
+/* --- 4d. The room light — STATIC, does not rotate ------------------------
+   The lamp does not orbit the room; the record turns under it. Because this
+   layer never moves it costs nothing, and it is what makes the swirl beneath
+   read as light being caught and released rather than as a painted-on smear. */
+.now__sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    /* the 28deg specular bar, 22% of the disc wide */
+    linear-gradient(118deg,
+      transparent 32%,
+      rgba(255, 255, 255, 0.09) 44%,
+      rgba(255, 255, 255, 0.09) 50%,
+      transparent 62%),
+    /* the soft key light, origin matched to the disc body's own 30%/25% */
+    radial-gradient(circle at 30% 25%,
+      rgba(255, 255, 255, 0.07) 0%,
+      transparent 55%);
+  box-shadow: var(--rim-light);
+  pointer-events: none;
+  z-index: 2;
+}
+
+
+/* --------------------------------------------------------------------------
+   5. THE LABEL
+   36% of the disc — the real proportion of a 100mm label on a 302mm record.
+   V1 used 56%, which is why the disc read as a frame around a thumbnail
+   instead of as vinyl.
+
+   NOT the album artwork by default: a circular crop is a crop, and Apple's
+   Identity Guidelines govern the asset. The uncropped square lives on the
+   sleeve (§3). This is a paper label filled with Apple's own Artwork.bgColor.
+   Rides the platter, so it inherits both rotations for free.
+   -------------------------------------------------------------------------- */
+.now__label {
+  position: absolute;
+  inset: var(--label-inset);
+  border-radius: 50%;
+  overflow: hidden;
+  background:
+    /* the hairline shadow where paper meets vinyl */
+    radial-gradient(circle at 50% 50%,
+      transparent 0 96%, rgba(0, 0, 0, 0.5) 96%),
+    /* paper stock: very slight tooth, lit from the same upper left */
+    radial-gradient(circle at 32% 26%,
+      color-mix(in oklab, var(--label-bg) 82%, #FFFFFF) 0%,
+      var(--label-bg) 68%,
+      color-mix(in oklab, var(--label-bg) 88%, #000000) 100%);
+  /* Static only. The 2px lip ring plus the drop is what makes the paper sit
+     PROUD of the pressing. Never transitioned. */
+  box-shadow:
+    0 0 0 0.125rem var(--label-lip),
+    0 0.25rem 0.75rem rgba(0, 0, 0, 0.55),
+    var(--rim-light);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 0 12%;
+  box-sizing: border-box;
+}
+
+/* Decorative duplicate of information already set at 28px+ in .now__meta, so
+   20px is permitted here (tokens.css §TYPE SCALE: caption may never carry
+   unique information). */
+.now__label-line {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  line-height: var(--lh-snug);
+  color: var(--label-ink);
+  transform: translateY(-18%);   /* clear of the spindle hole */
+}
+
+/* Spindle hole — 7.2mm of a 302mm disc. */
+.now__label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--spindle-on-label);   /* 6.6% of the label = 2.4% of the disc
+                                       = 13px @1080p (a real 7.2mm spindle) */
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--surface-0);
+  box-shadow: inset 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.9);
+}
+
+/* OPT-IN: circle-cropped artwork on the label. Off by default — see spec §4.5
+   and §7.6. Set data-label="art" and put an <img> inside .now__label. */
+.now__label[data-label="art"] { padding: 0; background: var(--surface-2); }
+.now__label[data-label="art"] .now__label-line { display: none; }
+.now__label[data-label="art"] img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+
+/* --------------------------------------------------------------------------
+   6. THE TONEARM — animated layer 4
+   Its angle is a SECOND, glanceable readout of track progress: from three
+   metres you can see how far in you are without reading the scrub bar.
+   -------------------------------------------------------------------------- */
+.now__tonearm {
+  position: absolute;
+  top: 4%;
+  right: -2%;
+  width: var(--arm-len);
+  height: 0.625rem;               /* 10px tube */
+  transform-origin: 92% 12%;      /* the pivot bearing */
+  transform: rotate(var(--arm-park));
+  transition: transform var(--arm-cue-out) var(--ease-out);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--text-tertiary) 70%, #FFFFFF) 0%,
+    var(--text-tertiary) 38%,
+    var(--surface-3) 100%);
+  box-shadow: var(--elev-2);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Cued down and tracking. 6deg at the lead-in groove, +18deg of travel to the
+   run-out; --now-arm-track is written 0..1 by JS once per second. */
+.now[data-state="starting"] .now__tonearm,
+.now[data-state="playing"] .now__tonearm {
+  transform: rotate(calc(
+    var(--arm-lead-in) + var(--now-arm-track) * var(--arm-travel)));
+}
+
+/* Cue-in is slower than cue-out and waits 200ms so the platter reaches speed
+   before the stylus lands — the order a person does it in. */
+.now[data-state="starting"] .now__tonearm {
+  transition: transform var(--arm-cue-in) var(--ease-out-soft) 200ms;
+}
+
+/* Once tracking, each per-second tick is a short, soft creep. */
+.now[data-state="playing"] .now__tonearm {
+  transition: transform var(--dur-slow) var(--ease-out-soft);
+}
+
+/* Counterweight at the pivot end. */
+.now__tonearm-weight {
+  position: absolute;
+  right: -1.25rem;
+  top: 50%;
+  width: 2.125rem;                /* 34px */
+  height: 2.125rem;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%,
+    var(--surface-4) 0%, var(--surface-2) 60%, var(--surface-1) 100%);
+  box-shadow: var(--elev-2), var(--rim-light);
+}
+
+/* Headshell + cartridge at the stylus end, canted the way a real one is. */
+.now__tonearm-head {
+  position: absolute;
+  left: -0.5rem;
+  top: 50%;
+  width: 2.75rem;                 /* 44px */
+  height: 1.625rem;               /* 26px */
+  transform: translateY(-50%) rotate(22deg);
+  transform-origin: right center;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg,
+    var(--surface-4) 0%, var(--surface-2) 100%);
+  box-shadow: var(--elev-2), var(--rim-light);
+}
+
+
+/* --------------------------------------------------------------------------
+   7. METADATA
+   -------------------------------------------------------------------------- */
+.now__meta {
+  align-self: center;
+  min-width: 0;
+  transition: opacity var(--dur-slow) var(--ease-out-soft);
+}
+
+.now__eyebrow {
+  font-size: var(--fs-body);           /* 24px */
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--art-accent);
+  margin: 0 0 var(--space-2);
+}
+
+.now__title {
+  font-size: var(--fs-display);        /* 64px */
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--space-3);
+  /* Two lines, then ellipsis. Long titles are common and a single clipped
+     line reads as a bug at three metres. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.now__artist {
+  font-size: var(--fs-title);          /* 36px */
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now__album {
+  font-size: var(--fs-body-lg);        /* 28px */
+  color: var(--text-tertiary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* --------------------------------------------------------------------------
+   8. TRANSPORT — animated layers 5 and 6
+   -------------------------------------------------------------------------- */
+.now__transport {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  opacity: 1;
+  transition: opacity var(--dur-slow) var(--ease-out-soft);
+}
+
+/* Auto-hide after 8s of no input while playing: the brightest, hardest-edged,
+   most rigidly positioned block on the screen should not be lit for hours. */
+.now[data-chrome="hidden"] .now__transport { opacity: 0; }
+
+.now__scrub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-num);
+  font-size: var(--fs-body);           /* 24px */
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.now__bar {
+  position: relative;
+  flex: 1;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+/* scaleX, never width — width relayouts every frame. */
+.now__fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(var(--now-progress));
+  background: var(--art-accent);
+  transition: transform var(--dur-fast) var(--ease-linear);
+}
+
+.now__buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.now .control {
+  width: var(--control-size);
+  height: var(--control-size);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-title-sm);
+  line-height: 1;
+}
+
+.now .control[data-primary="true"] {
+  width: var(--control-size-lg);
+  height: var(--control-size-lg);
+  background: var(--art-accent);
+  color: var(--text-on-accent);
+  font-size: var(--fs-title);
+}
+
+/* Focus on a transport button pulls the chrome back regardless of the timer. */
+.now .control[data-focused="true"] { z-index: 1; }
+
+
+/* --------------------------------------------------------------------------
+   9. IDLE + BURN-IN PROTECTION
+   data-idle="true" after 300s with no D-pad event; any key clears it.
+   Burn-in is a hardware defect, so this is defence in depth — four measures.
+   -------------------------------------------------------------------------- */
+
+/* 1. Global pixel-shift: +/-12px x, +/-8px y over a 480s cycle (~0.1px/s —
+      imperceptible). The extra 1rem inset on .now__body (§2) is exactly the
+      reserve this moves within, so nothing crosses the 5% safe area. */
+.now[data-idle="true"] .now__body {
+  animation: idle-drift 240s var(--ease-linear) infinite alternate;
+  will-change: transform;
+}
+
+@keyframes idle-drift {
+  from { transform: translate3d(-0.75rem, -0.5rem, 0); }
+  to   { transform: translate3d( 0.75rem,  0.5rem, 0); }
+}
+
+/* 2. The bright static furniture leaves. One keypress brings it back. */
+.now[data-idle="true"] .now__transport,
+.now[data-idle="true"] .now__meta { opacity: 0; }
+.now[data-idle="true"] .focusable::after { opacity: 0; }
+
+/* 3. Peak luminance cut of 42% — the single most effective OLED mitigation,
+      and it stops the panel's own ABL from pumping. Opacity only. */
+.now__dim {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: var(--z-modal);
+  transition: opacity var(--dur-slow) var(--ease-out-soft);
+}
+.now[data-idle="true"] .now__dim { opacity: 0.42; }
+
+/* 4. The one remaining lit object keeps rotating and so self-distributes its
+      own wear. Only the label centre is stationary, and measure 1 walks it.
+      The bloom is PAUSED rather than merely hidden, so the compositor has
+      nothing left to do for it. */
+.now[data-idle="true"] .now__bloom {
+  animation-play-state: paused;
+  opacity: 0.5;
+}
+
+/* VRAM hygiene: drop will-change the moment a layer stops moving
+   (tokens.css: permanent will-change exhausts TV VRAM). */
+.now[data-state="paused"] .now__vinyl,
+.now[data-state="stopped"] .now__vinyl,
+.now[data-state="paused"] .now__platter,
+.now[data-state="stopped"] .now__platter { will-change: auto; }
+.now[data-idle="false"] .now__body { will-change: auto; }
+
+
+/* --------------------------------------------------------------------------
+   10. REDUCED MOTION
+   tokens.css §16 already collapses every duration to 1ms. These rules state
+   the intent on top of that, because a 1ms `spin` would otherwise freeze the
+   disc at 0deg with a tonearm hovering over nothing.
+
+   Ambience is removed. Affordance and information are kept as STEPS.
+   Burn-in protection is kept, because a comfort preference must not be
+   allowed to damage someone's panel.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+
+  /* The disc renders static and at rest — still fully a record, just not
+     turning. Grooves, lands, swirl and sheen are all paint, so they survive. */
+  .now__vinyl { animation: none; transform: rotate(0deg); will-change: auto; }
+  .now__platter { animation: none !important; transform: rotate(0deg); will-change: auto; }
+
+  /* The bloom holds a static, slightly-expanded frame at full opacity. */
+  .now__bloom {
+    animation: none !important;
+    transform: scale(1.06) translate3d(0, 0, 0);
+    will-change: auto;
+  }
+
+  /* The arm still JUMPS to the correct angle — its position is information,
+     not decoration. No interpolation. */
+  .now__tonearm { transition: none !important; }
+
+  /* Continuous drift becomes a discrete four-corner jump. JS writes
+     --now-idle-shift (0..3) every 90s while idle. Same wear coverage,
+     zero perceived motion. */
+  .now[data-idle="true"] .now__body {
+    animation: none !important;
+    transform: translate3d(
+      calc((var(--now-idle-shift, 0) - 1.5) * 0.5rem),
+      calc((var(--now-idle-shift, 0) - 1.5) * 0.333rem), 0);
+    will-change: auto;
+  }
+
+  /* Progress becomes a step; the focus ring and its scale step are kept
+     instant, at the reduced --focus-scale-sm tokens.css already sets. */
+  .now__fill { transition: none !important; }
+}
+
+
+/* --------------------------------------------------------------------------
+   11. RESOLUTION NOTES
+   Every dimension above is in rem or in a % of --disc, and tokens.css drives
+   the root font-size from vw, so 720p / 1080p / 4K are geometrically
+   identical. The only clamps are the two min() calls on --disc and --sleeve,
+   which handle panels wider than 16:9 (21:9 TVs, and the letterboxed viewport
+   a desktop review window produces) by shrinking the stage rather than
+   letting it escape the safe area.
+
+   On a 16:10 panel --disc resolves to 52vh and the stage shrinks with it; the
+   meta column takes the reclaimed width, and .now__title's 2-line clamp keeps
+   the block from growing taller than the row.
+   -------------------------------------------------------------------------- */

@@ -433,9 +433,9 @@ the stylesheet can be swapped in.
         <div class="now__platter">              <!-- NEW: inertia wrapper -->
           <div class="now__vinyl">
             <div class="now__swirl"></div>      <!-- NEW: anisotropic lobes -->
-          </div>
-          <div class="now__label">              <!-- rides the platter -->
-            <span class="now__label-line">Apple Music</span>
+            <div class="now__label">            <!-- CHILD of vinyl, see below -->
+              <span class="now__label-line">Apple Music</span>
+            </div>
           </div>
         </div>
         <div class="now__sheen"></div>          <!-- NEW: static room light -->
@@ -454,6 +454,12 @@ the stylesheet can be swapped in.
   <div class="now__dim"></div>                  <!-- NEW: idle luminance cut -->
 </section>
 ```
+
+**Correction, verified in the browser:** the label must be a **child of
+`.now__vinyl`**, not a sibling. The continuous `spin` animation is on
+`.now__vinyl`; a sibling label sits perfectly still while the record turns
+underneath it, which no real record does. `.now__platter` still wraps both and
+carries the spin-up and spin-down rotation on top of the constant spin.
 
 ### Custom properties JS writes on `.now`
 

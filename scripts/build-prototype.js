@@ -18,10 +18,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const SOURCE = path.join(ROOT, "public", "tv", "index.html");
+
+// Which page to bundle. Defaults to the prototype; pass a path to bundle any
+// other page in the same tree, which is how design previews get published
+// without a second copy of this script.
+//   node scripts/build-prototype.js public/tv/now-v2.html
+const ENTRY = process.argv[2] || path.join("public", "tv", "index.html");
+const SOURCE = path.isAbsolute(ENTRY) ? ENTRY : path.join(ROOT, ENTRY);
 const OUT_DIR = path.join(ROOT, "dist");
-const OUT_FILE = path.join(OUT_DIR, "prototype.html");
-const ARTIFACT_FILE = path.join(OUT_DIR, "prototype-artifact.html");
+const BASE = path.basename(SOURCE, ".html");
+const OUT_FILE = path.join(OUT_DIR, `${BASE}.html`);
+const ARTIFACT_FILE = path.join(OUT_DIR, `${BASE}-artifact.html`);
 
 const LINK_PATTERN = /<link\b[^>]*rel=["']stylesheet["'][^>]*>/gi;
 const SCRIPT_PATTERN = /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/gi;
