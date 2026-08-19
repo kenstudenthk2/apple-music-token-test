@@ -27,8 +27,7 @@ library for as long as it remains valid. Not a password, not recoverable into
 one, and it cannot be used to sign in to anything else — but it is not harmless
 either.
 
-**How long it stays valid is still unknown.** `scripts/token-lifetime.js` exists
-to measure it and has not been run for long enough yet. That answer changes this
+**How long it stays valid is partly known.** A first run showed the token still valid after **1.5 hours** of idle time (`docs/TOKEN_LIFETIME.md`), which rules out the outcome that would have killed this idea outright — a token measured in minutes. It is not yet enough to decide: an overnight run is still wanted. That answer changes this
 decision: a token that survives months is worth protecting carefully; one that
 dies daily makes the whole question smaller.
 
