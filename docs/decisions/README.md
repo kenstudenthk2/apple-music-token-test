@@ -28,3 +28,4 @@ so the reasoning survives even though the decision is not a vote.
 | [ESCALATION-001](ESCALATION-001-phone-as-remote-input.md) | G4 | May the pairing session also carry text input from the phone? | ✅ **Option 1 — not in v1**; revisit after G5 |
 | [ESCALATION-002](ESCALATION-002-pairing-security-design.md) | G2 | How should the pairing flow be secured? | ✅ **Option A — split user_code / device_code (RFC 8628 shape)**. Endpoint design approved and **implemented**; gate G2 passed |
 | [VOTE-003](VOTE-003-back-at-root.md) | G4 | What does BACK do on Home? | **C — exit when idle, confirm while playing** (4–1, QA dissent on testability, answered by making the criterion state-explicit) |
+| [ESCALATION-003](ESCALATION-003-token-persistence.md) | G5 | Should the TV remember the listener between restarts? | ⏸ **awaiting the project owner** — auth surface, not votable |

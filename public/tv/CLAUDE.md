@@ -16,6 +16,8 @@ no hardware keyboard. Plain HTML/CSS/ES modules, no build step, no dependencies.
 | `scripts/api.js` | Apple Music API client — endpoints, item flattening, artwork URLs and palettes | You need data from Apple, or a shape changed |
 | `scripts/api.test.js` | Tests for the above. Runs in `npm test` | You changed `api.js` |
 | `scripts/player.js` | MusicKit wrapper — queue, transport, state snapshots | You are wiring playback |
+| `scripts/live-app.js` | The live application — screens, navigation, playback wiring | You are changing live behaviour |
+| `live.html` | Markup for the live app. Loads `live-app.js` | You are adding or changing a live screen |
 | `scripts/audit.js` | The G4 D-pad audit. Inert unless the URL carries `?audit=1` | You are changing a G4 criterion, or the audit reports something puzzling |
 | `package.json` | Marks this subtree as ESM so Node can lint it | Rarely |
 
