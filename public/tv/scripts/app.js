@@ -22,6 +22,24 @@ import { init, focus, onBack, refresh } from "./spatial-nav.js";
 const TILE_REM = 18;        /* --tile-size */
 const TILE_GAP_REM = 1.5;   /* --tile-gap  */
 
+/**
+ * The horizontal distance between two tiles, measured rather than assumed.
+ *
+ * This was hard-coded as 19.5rem from --tile-size plus what the comment claimed
+ * --tile-gap was. The token is actually var(--space-4) — 2rem, not 1.5 — so
+ * every step drifted 8px and the error accumulated along the row. Measuring two
+ * real tiles cannot drift, and survives any future change to either token.
+ */
+function tileStep(row) {
+  const tiles = row.children;
+  if (tiles.length < 2) return rem(TILE_REM);
+  // offsetLeft, not getBoundingClientRect: the focused tile is scaled by 1.08,
+  // which moves its painted edge and would poison a rect-based measurement with
+  // a few pixels that then accumulate along the row. offsetLeft is the layout
+  // position and ignores transforms entirely.
+  return tiles[1].offsetLeft - tiles[0].offsetLeft;
+}
+
 /** Convert rem to px at the current root font size. */
 function rem(value) {
   return value * parseFloat(getComputedStyle(document.documentElement).fontSize);
@@ -101,6 +119,8 @@ function renderShelves() {
     const row = document.createElement("div");
     row.className = "shelf__row";
     row.dataset.focusGroup = `shelf-${shelfIndex}`;
+    // LEFT and RIGHT stay inside the row. Leaving it happens with UP or DOWN.
+    row.dataset.focusContain = "x";
     shelf.items.forEach((item, itemIndex) => {
       row.appendChild(tile(item, shelfIndex, itemIndex));
     });
@@ -132,7 +152,7 @@ function positionShelves(tileNode) {
   const row = tileNode.parentElement;
   // Keep one tile of context to the left once the user is past the second card.
   const parked = Math.max(0, itemIndex - 1);
-  row.style.transform = `translate3d(${-parked * rem(TILE_REM + TILE_GAP_REM)}px, 0, 0)`;
+  row.style.transform = `translate3d(${-parked * tileStep(row)}px, 0, 0)`;
 }
 
 

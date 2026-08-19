@@ -227,13 +227,38 @@ function score(from, to, dir) {
  * Find the best element in `dir` from `origin`.
  * Pure geometry — DOM order is never consulted except as a final tie-break.
  */
+/**
+ * Groups may confine movement along an axis.
+ *
+ * A horizontal shelf is the motivating case: pressing LEFT on a card must reach
+ * the previous card or nothing at all. Purely geometric scoring can prefer a
+ * nav item that happens to sit up and to the left, which reads as the row
+ * "escaping upwards" and then needing a second press to get back — precisely
+ * the confusing behaviour NAVIGATION_MODEL forbids when it says rows stop at
+ * their edge.
+ *
+ * Mark a container with data-focus-contain="x" (or "y", or "xy").
+ */
+function containsAxis(group, dir) {
+  if (!group) return false;
+  const axes = group.getAttribute('data-focus-contain');
+  if (!axes) return false;
+  const horizontal = dir === 'left' || dir === 'right';
+  return axes.includes(horizontal ? 'x' : 'y');
+}
+
 function resolve(origin, dir) {
   const from = boxOf(origin);
+  const group = groupOf(origin);
+  const confined = containsAxis(group, dir);
+
   let best = null;
   let bestScore = Infinity;
 
   for (const el of candidates()) {
     if (el === origin) continue;
+    // Confined axes never leave the group; the edge is simply the end.
+    if (confined && groupOf(el) !== group) continue;
     const s = score(from, boxOf(el), dir);
     if (s === null) continue;
     if (s < bestScore) {

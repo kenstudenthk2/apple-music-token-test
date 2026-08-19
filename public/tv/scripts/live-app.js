@@ -175,6 +175,8 @@ function renderShelves(shelves) {
     const row = document.createElement("div");
     row.className = "shelf__row";
     row.dataset.focusGroup = `shelf-${shelfIndex}`;
+    // LEFT and RIGHT stay inside the row. Leaving it happens with UP or DOWN.
+    row.dataset.focusContain = "x";
     shelf.items.forEach((item, i) => row.appendChild(tile(item, shelfIndex, i)));
 
     viewport.appendChild(row);
@@ -190,9 +192,18 @@ function positionShelves(node) {
   stack.style.transform =
     `translate3d(0, ${-(section.offsetTop - stack.firstElementChild.offsetTop)}px, 0)`;
 
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  // Measured, not assumed. The hard-coded 19.5rem here was wrong — --tile-gap is
+  // var(--space-4), which is 2rem, not 1.5 — so every step drifted 8px and the
+  // error accumulated the further along a row the viewer travelled.
+  const row = node.parentElement;
+  const tiles = row.children;
+  // offsetLeft, not getBoundingClientRect: the focused tile is scaled by 1.08,
+  // which moves its painted edge and would poison the measurement.
+  const step = tiles.length > 1
+    ? tiles[1].offsetLeft - tiles[0].offsetLeft
+    : node.offsetWidth;
   const parked = Math.max(0, Number(node.dataset.index) - 1);
-  node.parentElement.style.transform = `translate3d(${-parked * 19.5 * rem}px, 0, 0)`;
+  row.style.transform = `translate3d(${-parked * step}px, 0, 0)`;
 }
 
 
