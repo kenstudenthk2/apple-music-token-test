@@ -94,19 +94,6 @@ function applyPalette(item) {
   }
 }
 
-/**
- * Build an <img> as a node. Artwork URLs are data; never interpolate them.
- *
- * Deliberately NOT lazy-loaded. Shelves are moved with transforms, and the
- * viewport intersection that drives lazy loading does not follow a transformed
- * ancestor reliably — tiles to the right and below simply never loaded their
- * artwork. Forty-eight covers at tile size is a small price for artwork that
- * predictably appears, and predictability is worth more on a television than
- * saved bandwidth.
- *
- * A failed load removes the element rather than leaving a broken-image glyph;
- * the tile's own surface colour is a perfectly good placeholder.
- */
 /* ------------------------------------------------------------------ *
  * Artwork diagnostics (?diag=1)
  *
@@ -152,6 +139,19 @@ function renderDiag() {
   }
 }
 
+/**
+ * Build an <img> as a node. Artwork URLs are data; never interpolate them.
+ *
+ * Deliberately NOT lazy-loaded. Shelves are moved with transforms, and the
+ * viewport intersection that drives lazy loading does not follow a transformed
+ * ancestor reliably — tiles to the right and below simply never loaded their
+ * artwork. Forty-eight covers at tile size is a small price for artwork that
+ * predictably appears, and predictability is worth more on a television than
+ * saved bandwidth.
+ *
+ * A failed load removes the element rather than leaving a broken-image glyph;
+ * the tile's own surface colour is a perfectly good placeholder.
+ */
 function artNode(item, size) {
   const url = artworkUrl(item?.artwork, size * (window.devicePixelRatio || 1));
   if (!url) {
@@ -192,6 +192,33 @@ function fillArt(container, item, size) {
   container.textContent = "";
   const img = artNode(item, size);
   if (img) container.appendChild(img);
+}
+
+
+/**
+ * Let the focused item scroll its title, but only if it actually overflows.
+ *
+ * At three metres a truncated title is unreadable, and an ellipsis gives the
+ * viewer nothing to act on. Measured per focus change rather than up front,
+ * because the answer depends on the rendered font and the item's width.
+ *
+ * The distance and the duration are written as custom properties so a long
+ * title does not scroll faster than a short one — constant speed, not constant
+ * duration.
+ */
+function markOverflowingTitle(node) {
+  const title = node.querySelector(".tile__title, .list__name");
+  if (!title) return;
+
+  const overflow = title.scrollWidth - title.clientWidth;
+  if (overflow <= 4) {
+    title.removeAttribute("data-marquee");
+    return;
+  }
+  title.dataset.marquee = "true";
+  title.style.setProperty("--marquee-shift", `${-overflow}px`);
+  // ~60px per second, plus the holds at each end.
+  title.style.setProperty("--marquee-dur", `${(overflow / 60) * 2 + 4}s`);
 }
 
 
@@ -516,6 +543,7 @@ function wireInput(credentials) {
     const node = event.detail.element;
     if (!node) return;
     node.setAttribute("data-focused", "true");
+    markOverflowingTitle(node);
     if (node.classList.contains("tile")) {
       positionShelves(node);
       applyPalette(node.__item);

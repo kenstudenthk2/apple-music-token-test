@@ -902,3 +902,43 @@
 [hidden] {
   display: none !important;
 }
+
+
+/* --------------------------------------------------------------------------
+   MARQUEE — long titles, focused item only
+   At three metres an ellipsis is not a hint, it is a dead end: "2014 2NE1
+   WORLD TOUR LIVE - ALL OR N…" tells a viewer nothing they can act on. The
+   focused item scrolls its title so it can actually be read.
+
+   Only the focused element animates, so the cost is one layer regardless of
+   how many items are on screen. JS sets --marquee-shift to the real overflow
+   distance and --marquee-dur proportional to it, so long titles do not scroll
+   faster than short ones.
+   -------------------------------------------------------------------------- */
+.tile__title,
+.list__name {
+  /* The scrolling element must be free to exceed its box; the parent clips. */
+  will-change: auto;
+}
+
+[data-focused="true"] .tile__title[data-marquee="true"],
+[data-focused="true"] .list__name[data-marquee="true"] {
+  animation: marquee var(--marquee-dur, 6s) var(--ease-linear) infinite;
+  /* A stationary title is the resting state; the scroll is the exception. */
+  animation-delay: 1.2s;
+}
+
+@keyframes marquee {
+  /* Hold at the start, travel, hold at the end, travel back. Holds are what
+     make it readable rather than a conveyor belt. */
+  0%,   18% { transform: translateX(0); }
+  46%,  64% { transform: translateX(var(--marquee-shift, 0px)); }
+  92%, 100% { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-focused="true"] .tile__title[data-marquee="true"],
+  [data-focused="true"] .list__name[data-marquee="true"] {
+    animation: none;
+  }
+}
