@@ -4,6 +4,8 @@ const test = require("node:test");
 const {
   SESSION_TTL_MS,
   createServer,
+  deviceCodeIndex,
+  failures,
   generateCode,
   sessions,
 } = require("./pairing-server");
@@ -24,9 +26,22 @@ const {
 
 const FAKE_DEVELOPER_TOKEN = "header.payload.signature";
 
-/** Start the real server on an ephemeral port. No .p8 needed. */
-async function withServer(run) {
+/**
+ * Start the real server on an ephemeral port. No .p8 needed.
+ *
+ * All three module-level maps are reset, not just `sessions`. Every test runs
+ * from 127.0.0.1, so a leftover failure count from the rate-limit test would
+ * throttle whichever test happened to run next — a false failure that looks
+ * exactly like a real one.
+ */
+function resetState() {
   sessions.clear();
+  deviceCodeIndex.clear();
+  failures.clear();
+}
+
+async function withServer(run) {
+  resetState();
   const server = createServer(FAKE_DEVELOPER_TOKEN);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -35,7 +50,7 @@ async function withServer(run) {
     return await run(base);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    sessions.clear();
+    resetState();
   }
 }
 

@@ -1,11 +1,24 @@
 /**
- * POC-A pairing backend (localhost only).
+ * Pairing backend — RFC 8628 device-authorization shape.
  *
  * Flow:
- *   1. TV      -> POST /api/session              -> { code, activateUrl }
- *   2. Phone   -> GET  /activate/:code           -> MusicKit JS authorize page
- *   3. Phone   -> POST /api/session/:code/token  -> stores the Music User Token
- *   4. TV      -> GET  /api/session/:code        -> polls until status=authorized
+ *   1. TV     -> POST /api/session               -> { user_code, device_code, ... }
+ *   2. Phone  -> GET  /activate/:user_code       -> MusicKit JS authorize page
+ *   3. Phone  -> POST /api/activate/:user_code   -> stores the Music User Token, 204
+ *   4. TV     -> GET  /api/session/token         -> Bearer device_code, polls
+ *
+ * The security property this design exists for:
+ *
+ *   Two credentials, because the roles need opposite properties. `user_code` is
+ *   short because a human reads it off a television across a room, and it is
+ *   therefore low-entropy by necessity — so it is a lookup handle and nothing
+ *   more. NO ROUTE RETURNS A MUSIC USER TOKEN IN RESPONSE TO A user_code.
+ *   Retrieval requires `device_code`: 32 CSPRNG bytes, issued once to the TV,
+ *   stored only as a SHA-256 hash, never logged.
+ *
+ *   An earlier version conflated the two, so anyone who guessed a live
+ *   four-character code received a stranger's Apple Music access. See
+ *   docs/decisions/ESCALATION-002-pairing-security-design.md.
  *
  * Nothing is persisted to disk. Tokens live in memory only.
  */
@@ -18,11 +31,26 @@ const path = require("node:path");
 const { createDeveloperToken, loadEnvFile } = require("./test-token");
 
 const PORT = Number(process.env.PORT || 8787);
-const SESSION_TTL_MS = 10 * 60 * 1000;
+// Five minutes. Long enough to find your phone, short enough that a live code
+// is rarely there to be found.
+const SESSION_TTL_MS = 5 * 60 * 1000;
+const POLL_INTERVAL_SECONDS = 2;
 // Ambiguous characters (0/O, 1/I) are omitted so a code stays readable on a TV.
 const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const DEVICE_CODE_BYTES = 32;
 
+// Brute force is made of failures, so failures are what is counted. A TV
+// polling at POLL_INTERVAL_SECONDS makes 30 honest requests a minute and must
+// never be locked out of its own session.
+const FAILURE_LIMIT = 5;
+const FAILURE_WINDOW_MS = 60 * 1000;
+
+/** user_code -> session. The device_code is present only as a hash. */
 const sessions = new Map();
+/** sha256(device_code) -> user_code. The only route to a token. */
+const deviceCodeIndex = new Map();
+/** client IP -> array of failure timestamps within the window. */
+const failures = new Map();
 
 function resolvePrivateKeyPath(privateKeyPath) {
   if (!privateKeyPath) {
@@ -53,10 +81,32 @@ function generateCode() {
   return `TV-${suffix}`;
 }
 
+/** SHA-256, base64url. Used so no raw device_code is ever stored. */
+function hash(value) {
+  return crypto.createHash("sha256").update(value).digest("base64url");
+}
+
+/** Drop a session and its device-code index entry together. */
+function destroySession(session) {
+  sessions.delete(session.userCode);
+  deviceCodeIndex.delete(session.deviceCodeHash);
+}
+
 function sweepExpiredSessions(now = Date.now()) {
-  for (const [code, session] of sessions) {
+  for (const session of [...sessions.values()]) {
     if (now - session.createdAt > SESSION_TTL_MS) {
-      sessions.delete(code);
+      destroySession(session);
+    }
+  }
+
+  // Sweep the failure counter too. Without this it grows one entry per hostile
+  // IP forever, which turns a brute-force attempt into a memory-exhaustion one.
+  for (const [ip, timestamps] of failures) {
+    const recent = timestamps.filter((at) => now - at < FAILURE_WINDOW_MS);
+    if (recent.length === 0) {
+      failures.delete(ip);
+    } else {
+      failures.set(ip, recent);
     }
   }
 }
@@ -64,19 +114,55 @@ function sweepExpiredSessions(now = Date.now()) {
 function createSession(baseUrl) {
   sweepExpiredSessions();
 
-  let code = generateCode();
-  while (sessions.has(code)) {
-    code = generateCode();
+  let userCode = generateCode();
+  while (sessions.has(userCode)) {
+    userCode = generateCode();
   }
 
-  sessions.set(code, {
-    code,
+  // Issued once, in the response below, and never again. Only its hash is kept.
+  const deviceCode = crypto.randomBytes(DEVICE_CODE_BYTES).toString("base64url");
+  const deviceCodeHash = hash(deviceCode);
+
+  sessions.set(userCode, {
+    userCode,
+    deviceCodeHash,
     createdAt: Date.now(),
     status: "pending",
     musicUserToken: null,
   });
+  deviceCodeIndex.set(deviceCodeHash, userCode);
 
-  return { code, activateUrl: `${baseUrl}/activate/${code}` };
+  return {
+    user_code: userCode,
+    device_code: deviceCode,
+    activate_url: `${baseUrl}/activate/${userCode}`,
+    expires_in: Math.floor(SESSION_TTL_MS / 1000),
+    interval: POLL_INTERVAL_SECONDS,
+  };
+}
+
+/** Best-effort client identity for the failure counter. */
+function clientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || req.socket.remoteAddress || "unknown";
+}
+
+/** True once this IP has exceeded the failure budget for the current window. */
+function isRateLimited(req, now = Date.now()) {
+  const recent = (failures.get(clientIp(req)) || [])
+    .filter((at) => now - at < FAILURE_WINDOW_MS);
+  return recent.length >= FAILURE_LIMIT;
+}
+
+/**
+ * Record a failed lookup. Only failures count: a successful poll of a valid
+ * session is the TV doing exactly what it was told to do.
+ */
+function recordFailure(req, now = Date.now()) {
+  const ip = clientIp(req);
+  const recent = (failures.get(ip) || []).filter((at) => now - at < FAILURE_WINDOW_MS);
+  recent.push(now);
+  failures.set(ip, recent);
 }
 
 function sendJson(res, statusCode, body) {
@@ -146,27 +232,59 @@ async function handleRequest(req, res, developerToken) {
     return;
   }
 
-  const sessionMatch = pathname.match(/^\/api\/session\/([A-Za-z0-9-]+)$/);
-  if (req.method === "GET" && sessionMatch) {
+  // The TV collects its token. This is the ONLY route that returns a Music
+  // User Token, and it is reachable only with the device_code.
+  if (req.method === "GET" && pathname === "/api/session/token") {
+    const header = String(req.headers.authorization || "");
+    const deviceCode = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (!deviceCode) {
+      sendJson(res, 401, { error: "A device_code bearer token is required." });
+      return;
+    }
+
+    if (isRateLimited(req)) {
+      sendJson(res, 429, { error: "Too many failed attempts. Try again shortly." });
+      return;
+    }
+
     sweepExpiredSessions();
-    const session = sessions.get(sessionMatch[1].toUpperCase());
+    // Hash-table lookup, so there is no character-by-character comparison whose
+    // duration could reveal how much of a guess was correct.
+    const session = sessions.get(deviceCodeIndex.get(hash(deviceCode)));
     if (!session) {
+      recordFailure(req);
       sendJson(res, 404, { error: "Unknown or expired session." });
       return;
     }
-    sendJson(res, 200, {
-      code: session.code,
-      status: session.status,
-      musicUserToken: session.musicUserToken,
-    });
+
+    if (session.status !== "authorized") {
+      sendJson(res, 200, { status: "pending", interval: POLL_INTERVAL_SECONDS });
+      return;
+    }
+
+    // Single use. Once handed over, the session is destroyed, so a device_code
+    // recovered later from a proxy log or a crash dump is worth nothing.
+    const musicUserToken = session.musicUserToken;
+    destroySession(session);
+    console.log(`[pairing] ${session.userCode} collected`);
+    sendJson(res, 200, { status: "authorized", musicUserToken });
     return;
   }
 
-  const tokenMatch = pathname.match(/^\/api\/session\/([A-Za-z0-9-]+)\/token$/);
-  if (req.method === "POST" && tokenMatch) {
+  // The phone hands over the token it obtained from Apple. It presents the
+  // user_code, because that is all it has ever had — and it gets nothing back,
+  // so it cannot leak a token it never receives.
+  const activateApiMatch = pathname.match(/^\/api\/activate\/([A-Za-z0-9-]+)$/);
+  if (req.method === "POST" && activateApiMatch) {
+    if (isRateLimited(req)) {
+      sendJson(res, 429, { error: "Too many failed attempts. Try again shortly." });
+      return;
+    }
+
     sweepExpiredSessions();
-    const session = sessions.get(tokenMatch[1].toUpperCase());
+    const session = sessions.get(activateApiMatch[1].toUpperCase());
     if (!session) {
+      recordFailure(req);
       sendJson(res, 404, { error: "Unknown or expired session." });
       return;
     }
@@ -186,8 +304,10 @@ async function handleRequest(req, res, developerToken) {
 
     session.musicUserToken = body.musicUserToken;
     session.status = "authorized";
-    console.log(`[pairing] ${session.code} authorized`);
-    sendJson(res, 200, { code: session.code, status: session.status });
+    // Only the user_code is ever logged. Never the device_code, never the token.
+    console.log(`[pairing] ${session.userCode} authorized`);
+    res.writeHead(204, { "Cache-Control": "no-store" });
+    res.end();
     return;
   }
 
@@ -253,6 +373,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  deviceCodeIndex,
+  failures,
   SESSION_TTL_MS,
   createServer,
   createSession,
