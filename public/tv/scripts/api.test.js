@@ -202,7 +202,11 @@ test("library tracks and catalog tracks use different endpoints", async () => {
   await client.tracks({ id: "l.abc", type: "library-playlists" });
   await client.tracks({ id: "pl.xyz", type: "playlists" });
 
-  assert.match(impl.calls[0], /\/v1\/me\/library\/library-playlists\/l\.abc\/tracks/);
+  // This asserted /v1/me/library/library-playlists/... — the doubled prefix
+  // Apple answers with a 400. The second test I wrote that agreed with my own
+  // mistake instead of checking what the API accepts.
+  assert.match(impl.calls[0], /\/v1\/me\/library\/playlists\/l\.abc\/tracks/);
+  assert.doesNotMatch(impl.calls[0], /library\/library-/);
   assert.match(impl.calls[1], /\/v1\/catalog\/us\/playlists\/pl\.xyz\/tracks/);
 });
 
@@ -275,4 +279,25 @@ test("every placeholder is substituted, including the crop code", () => {
 test("an unknown placeholder is dropped rather than requested literally", () => {
   const url = artworkUrl({ url: "https://is1.mzstatic.com/image/abc/{w}x{h}{c}{sr}.{f}" }, 288);
   assert.doesNotMatch(url, /[{}]/, url);
+});
+
+test("library album tracks use the un-prefixed kind", async () => {
+  // The exact failure seen on the device:
+  //   HTTP 400 for /v1/me/library/library-albums/l.edw1C7n/tracks
+  const impl = fakeFetch([["/tracks", { data: [] }]]);
+  const client = createClient({ developerToken: DEV, musicUserToken: MUT, fetchImpl: impl });
+
+  await client.tracks({ id: "l.edw1C7n", type: "library-albums" });
+
+  assert.match(impl.calls[0], /\/v1\/me\/library\/albums\/l\.edw1C7n\/tracks/);
+  assert.doesNotMatch(impl.calls[0], /library-albums/);
+});
+
+test("a catalog album is not mistaken for a library one", async () => {
+  const impl = fakeFetch([["/tracks", { data: [] }]]);
+  const client = createClient({ developerToken: DEV, musicUserToken: MUT, fetchImpl: impl });
+
+  await client.tracks({ id: "1440857781", type: "albums" });
+
+  assert.match(impl.calls[0], /\/v1\/catalog\/us\/albums\/1440857781\/tracks/);
 });

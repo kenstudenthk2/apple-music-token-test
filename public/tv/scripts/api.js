@@ -178,12 +178,20 @@ function createClient({ developerToken, musicUserToken, storefront = "us", fetch
       return list(await request("/v1/me/library/albums", { params: { limit } }));
     },
 
-    /** Tracks of a playlist or album, for the detail screen. */
+    /**
+     * Tracks of a playlist or album, for the detail screen.
+     *
+     * The library path already contains "library", and the item's type is
+     * "library-albums" — pasting both produced
+     * /v1/me/library/library-albums/... which Apple answers with a 400. The
+     * prefix has to come off exactly once.
+     */
     async tracks(item, limit = 100) {
       const isLibrary = String(item.id).startsWith("l.") || item.type?.startsWith("library-");
+      const kind = String(item.type || "").replace(/^library-/, "");
       const base = isLibrary
-        ? `/v1/me/library/${item.type}/${item.id}/tracks`
-        : `/v1/catalog/${storefront}/${item.type}/${item.id}/tracks`;
+        ? `/v1/me/library/${kind}/${item.id}/tracks`
+        : `/v1/catalog/${storefront}/${kind}/${item.id}/tracks`;
       return list(await request(base, { params: { limit } }));
     },
 
