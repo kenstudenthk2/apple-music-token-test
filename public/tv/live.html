@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/app.css">
 <link rel="stylesheet" href="styles/now-playing-v2.css">
+<link rel="stylesheet" href="styles/library-v2.css">
 <style>
   /* Live-only additions. Everything else comes from the reviewed design system. */
   .boot {
@@ -38,22 +39,23 @@
 
   /* Real artwork, unlike the prototype's CSS gradients. */
   .tile__art img,
+  .now__sleeve-art img,
   .now__label img,
   .miniplayer__art img,
-  .detail__art img,
-  #library-art img {
+  .detail__art img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
   .now__label img { border-radius: 50%; }
-  .detail__art, #library-art { overflow: hidden; }
+  .detail__art { overflow: hidden; }
 </style>
 </head>
 <body>
 
-<div class="app" id="app">
+<!-- data-nav biases the screen transition: forward on entering, back on leaving. -->
+<div class="app" id="app" data-nav="forward">
 
   <!-- ============================================================ SCREEN: BOOT -->
   <section class="screen" data-screen="boot" data-active="true">
@@ -106,13 +108,18 @@
         <div class="nav__item focusable" data-size="sm" data-focusable
              data-action="go" data-target="search">Search</div>
       </nav>
-      <div class="detail">
-        <div>
-          <div class="detail__art" id="library-art"></div>
-          <h2 class="detail__title">Your Library</h2>
-          <p class="detail__sub" id="library-sub">Loading…</p>
-        </div>
-        <div class="list" data-focus-group="library-list" id="library-list"></div>
+      <div class="library__head">
+        <h1 class="library__title">Your Library</h1>
+        <p class="detail__sub" id="library-sub">Loading…</p>
+      </div>
+
+      <!--
+        Three shelves, not one list. A playlist, an album and an artist are
+        told apart by silhouette rather than by reading a label, which is the
+        only thing that works at three metres — see docs/design/LIBRARY_V2.md.
+      -->
+      <div class="shelves" data-moving="none">
+        <div class="shelves__track" id="library-shelves"></div>
       </div>
     </div>
   </section>

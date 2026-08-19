@@ -132,7 +132,18 @@
   right: 0;
   height: 4.75rem;              /* 76px: 44px title + 32px margin */
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;        /* the count sits on the title's baseline */
+  gap: var(--space-4);
+}
+
+/* The live app puts a count beside the title ("6 playlists · 14 albums …").
+   Aligned on the baseline and pushed down the visual hierarchy, so it reads as
+   an annotation rather than competing with the screen name. */
+.library__head .detail__sub {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
 .library__title {
@@ -225,6 +236,18 @@
 /* ==========================================================================
    5. TILE — the object, and its focus feel
    ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   HOME KEEPS ITS OWN TILE SIZE
+   This stylesheet is loaded app-wide so Home and Library share one tile
+   treatment — the focus feel, the shelf dimming and the entry stagger should
+   not differ between two screens that show the same kind of thing. Only the
+   dimension differs: Library fits three shelves at 240px, Home shows four at
+   288px, and the size is a variable precisely so one file can serve both.
+   -------------------------------------------------------------------------- */
+.screen[data-screen="home"] {
+  --lib-tile: var(--tile-size);
+}
 
 .tile {
   width: var(--lib-tile);

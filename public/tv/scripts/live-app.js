@@ -39,7 +39,7 @@ const app = {
 /** Where focus lands when a screen opens, if nothing is remembered. */
 const ENTRY_FOCUS = {
   home: () => document.querySelector('[data-screen="home"] .tile'),
-  library: () => document.querySelector("#library-list .list__track"),
+  library: () => document.querySelector("#library-shelves .tile"),
   search: () => document.querySelector("#search-keys .key"),
   detail: () => document.querySelector("#detail-list .list__track"),
   now: () => el("now-playpause"),
@@ -356,27 +356,155 @@ function renderList(container, items, { action, meta }) {
  * Library
  * ------------------------------------------------------------------ */
 
+/**
+ * One library tile.
+ *
+ * `data-kind` is what the stylesheet reads to give each kind its silhouette: a
+ * stack for a playlist, a record poking out for an album, a circle for an
+ * artist. That is the only thing that survives at three metres — colour on
+ * arbitrary artwork does not, and nobody reads a label from the sofa.
+ */
+function libraryTile(item, kind, index) {
+  const node = document.createElement("div");
+  node.className = "tile focusable";
+  node.setAttribute("data-focusable", "");
+  node.dataset.focusable = "";
+  node.dataset.kind = kind;
+  node.dataset.action = kind === "artist" ? "noop" : "detail";
+  node.dataset.enter = "1";
+  node.dataset.index = String(index);
+  // Read once per tile by the entry stagger; never re-read.
+  node.style.setProperty("--i", String(index));
+
+  // The album's record is the same object as the turntable's, down to the
+  // material tokens. Focus an album, see a sliver; press OK, see the whole one.
+  if (kind === "album") {
+    const disc = document.createElement("span");
+    disc.className = "tile__disc";
+    node.appendChild(disc);
+  }
+
+  const art = document.createElement("div");
+  art.className = "tile__art";
+  const img = artNode(item, 240);
+  if (img) art.appendChild(img);
+
+  const label = document.createElement("div");
+  label.className = "tile__label";
+  const title = document.createElement("div");
+  title.className = "tile__title";
+  title.textContent = item.title;
+  const subtitle = document.createElement("div");
+  subtitle.className = "tile__subtitle";
+  subtitle.textContent =
+    kind === "playlist" ? (item.trackCount ? `${item.trackCount} songs` : "Playlist")
+    : kind === "artist" ? "Artist"
+    : item.artist || "";
+  label.append(title, subtitle);
+
+  node.append(art, label);
+  node.__item = item;
+  return node;
+}
+
+function renderLibraryShelves(shelves) {
+  const track = el("library-shelves");
+  track.textContent = "";
+
+  shelves.forEach((shelf, shelfIndex) => {
+    if (!shelf.items.length) return;
+
+    const section = document.createElement("section");
+    section.className = "shelf";
+    section.dataset.kind = shelf.kind;
+    if (shelfIndex === 0) section.dataset.active = "true";
+
+    const header = document.createElement("header");
+    header.className = "shelf__header";
+    header.textContent = `${shelf.title} `;
+    const count = document.createElement("span");
+    count.className = "shelf__count";
+    count.textContent = String(shelf.items.length);
+    header.appendChild(count);
+
+    const viewport = document.createElement("div");
+    viewport.className = "shelf__viewport";
+    const row = document.createElement("div");
+    row.className = "shelf__row";
+    row.dataset.focusGroup = `library-${shelf.kind}`;
+    row.dataset.focusContain = "x";
+    shelf.items.forEach((item, i) => row.appendChild(libraryTile(item, shelf.kind, i)));
+
+    viewport.appendChild(row);
+    section.append(header, viewport);
+    track.appendChild(section);
+  });
+}
+
+/**
+ * Move the library stack and the active row.
+ *
+ * Each value is written as a custom property read by exactly ONE element's own
+ * transform — never by a child. A property read by many children forces a
+ * style recalculation per child on every move, which is the trap
+ * MOTION_RESEARCH.md section 6 warns about.
+ */
+function positionLibrary(node) {
+  const track = el("library-shelves");
+  const section = node.closest(".shelf");
+  const row = node.parentElement;
+  if (!section || !track.firstElementChild) return;
+
+  for (const shelf of track.children) {
+    shelf.dataset.active = String(shelf === section);
+  }
+
+  const offset = section.offsetTop - track.firstElementChild.offsetTop;
+  track.style.setProperty("--shelf-y", `${-offset}px`);
+
+  const tiles = row.children;
+  const step = tiles.length > 1
+    ? tiles[1].offsetLeft - tiles[0].offsetLeft
+    : node.offsetWidth;
+  const parked = Math.max(0, Number(node.dataset.index) - 1);
+  row.style.setProperty("--row-x", `${-parked * step}px`);
+}
+
+/** Tell the stylesheet which axis is moving so it can bias its easing. */
+let libraryMoveTimer = null;
+let lastLibraryRow = null;
+function flagLibraryMovement(row) {
+  const box = document.querySelector('[data-screen="library"] .shelves');
+  if (!box) return;
+  box.dataset.moving = row === lastLibraryRow ? "h" : "v";
+  lastLibraryRow = row;
+  clearTimeout(libraryMoveTimer);
+  libraryMoveTimer = setTimeout(() => { box.dataset.moving = "none"; }, 280);
+}
+
 async function openLibrary() {
   show("library");
-  const list = el("library-list");
-  list.textContent = "Loading…";
+  el("library-sub").textContent = "Loading…";
 
-  const [playlists, albums] = await Promise.all([
-    app.client.libraryPlaylists(25).catch(() => []),
-    app.client.libraryAlbums(25).catch(() => []),
+  // Three requests in parallel: a slow shelf must not hold up the other two.
+  const settle = (p) => p.then((v) => v, () => []);
+  const [playlists, albums, artists] = await Promise.all([
+    settle(app.client.libraryPlaylists(25)),
+    settle(app.client.libraryAlbums(25)),
+    settle(app.client.libraryArtists(25)),
   ]);
 
-  const items = [...playlists, ...albums];
-  renderList(list, items, {
-    action: "detail",
-    meta: (item) => (item.trackCount ? `${item.trackCount} songs` : item.artist || ""),
-  });
+  renderLibraryShelves([
+    { kind: "playlist", title: "Playlists", items: playlists },
+    { kind: "album", title: "Albums", items: albums },
+    { kind: "artist", title: "Artists", items: artists },
+  ]);
+
   el("library-sub").textContent =
-    `${playlists.length} playlists · ${albums.length} albums`;
-  fillArt(el("library-art"), items[0], 416);
+    `${playlists.length} playlists · ${albums.length} albums · ${artists.length} artists`;
 
   refresh();
-  const first = list.querySelector(".list__track");
+  const first = el("library-shelves").querySelector(".tile");
   if (first) focus(first);
 }
 
@@ -603,7 +731,13 @@ function wireInput(credentials) {
     node.setAttribute("data-focused", "true");
     markOverflowingTitle(node);
     if (node.classList.contains("tile")) {
-      positionShelves(node);
+      // Home and Library both use tiles but move different stacks.
+      if (app.screen === "library") {
+        flagLibraryMovement(node.parentElement);
+        positionLibrary(node);
+      } else {
+        positionShelves(node);
+      }
       applyPalette(node.__item);
     }
   });

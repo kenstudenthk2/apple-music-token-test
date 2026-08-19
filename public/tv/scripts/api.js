@@ -179,6 +179,17 @@ function createClient({ developerToken, musicUserToken, storefront = "us", fetch
     },
 
     /**
+     * Artists in the library.
+     *
+     * Library artists carry no artwork of their own — Apple returns a name and
+     * little else — so the caller must expect `artwork: null` and fall back to
+     * a plain tile rather than waiting for an image that never arrives.
+     */
+    async libraryArtists(limit = 25) {
+      return list(await request("/v1/me/library/artists", { params: { limit } }));
+    },
+
+    /**
      * Tracks of a playlist or album, for the detail screen.
      *
      * The library path already contains "library", and the item's type is

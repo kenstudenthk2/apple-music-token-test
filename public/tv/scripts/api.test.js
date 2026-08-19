@@ -301,3 +301,17 @@ test("a catalog album is not mistaken for a library one", async () => {
 
   assert.match(impl.calls[0], /\/v1\/catalog\/us\/albums\/1440857781\/tracks/);
 });
+
+test("library artists come from their own endpoint", async () => {
+  const impl = fakeFetch([["/v1/me/library/artists", {
+    data: [{ id: "r.abc", type: "library-artists", attributes: { name: "2NE1" } }],
+  }]]);
+  const client = createClient({ developerToken: DEV, musicUserToken: MUT, fetchImpl: impl });
+
+  const [artist] = await client.libraryArtists();
+  assert.match(impl.calls[0], /\/v1\/me\/library\/artists/);
+  assert.equal(artist.title, "2NE1");
+  // Apple returns no artwork for library artists; the UI must not wait for one.
+  assert.equal(artist.artwork, null);
+  assert.equal(artist.palette, null);
+});
