@@ -382,6 +382,16 @@ function show(name, { push = true } = {}) {
 function handleBack() {
   if (app.screen === "pair") return true;
 
+  // On Search, BACK is backspace while there is anything to delete. Every TV
+  // keyboard on the market behaves this way, and without it the only way to fix
+  // a typo is to walk the focus over to DELETE and back again. Only once the
+  // query is empty does BACK mean "leave the screen".
+  if (app.screen === "search" && app.query) {
+    app.query = app.query.slice(0, -1);
+    renderSearchResults();
+    return true;
+  }
+
   if (app.screen === "home") {
     // A real app would raise an "Exit AppleTune?" confirmation here. Never
     // drop the user out of the app on a single BACK press.
@@ -408,10 +418,16 @@ const ACTIONS = {
     show("now");
   },
 
-  playlist: () => {
+  playlist: (node) => {
     // A playlist opens straight into playback in the prototype. The real app
     // opens a track list first; that screen reuses .list wholesale.
-    play(SHELVES[2].items[0]);
+    //
+    // Each playlist maps to a distinct release rather than all six landing on
+    // the same track: during review, identical results read as a broken tile,
+    // not as a deliberate shortcut.
+    const shelf = SHELVES[2].items;
+    const index = PLAYLISTS.findIndex((item) => item.id === node.dataset.playlist);
+    play(shelf[Math.max(0, index) % shelf.length]);
     show("now");
   },
 
