@@ -891,3 +891,14 @@
   background: var(--danger);
   color: var(--text-inverse);
 }
+
+/* --------------------------------------------------------------------------
+   [hidden] MUST WIN
+   The attribute only sets display:none through the user-agent stylesheet, so
+   any author rule with a display value silently defeats it. `.pair__panel` sets
+   display:flex, which meant a hidden QR panel still rendered — as an empty
+   white square, which reads as a broken QR rather than as no QR at all.
+   -------------------------------------------------------------------------- */
+[hidden] {
+  display: none !important;
+}
