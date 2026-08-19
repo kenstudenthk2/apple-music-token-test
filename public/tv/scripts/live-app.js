@@ -507,12 +507,13 @@ function wireInput(credentials) {
       return true;
     }
     if (app.screen === "boot") return true;
-    if (app.screen === "home") {
-      // VOTE-003 exits here on a real device. In a browser tab there is nothing
-      // to exit to, so say so rather than appearing broken.
-      el("home-clock").textContent = "BACK would exit the app on a television";
-      return true;
-    }
+
+    // Home is the root. Returning TRUE here told the Android host "handled" and
+    // the host then did nothing — which trapped the viewer inside the app with
+    // no way out. Returning false hands BACK back to the host, which walks the
+    // WebView history (to the launcher) or finishes the Activity. VOTE-003 asks
+    // for exactly this when nothing is playing.
+    if (app.screen === "home") return false;
     show(app.history.pop() || "home", { push: false });
     return true;
   });

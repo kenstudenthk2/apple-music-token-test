@@ -116,6 +116,10 @@ public class MainActivity extends Activity {
         // how a DRM failure gets diagnosed if the on-screen log is not enough.
         WebView.setWebContentsDebuggingEnabled(true);
 
+        // Only our own pages are ever loaded, and the bridge exposes exactly one
+        // argument-free method, so the surface is a single "close the app".
+        view.addJavascriptInterface(new Host(), "AndroidHost");
+
         view.setBackgroundColor(Color.parseColor("#0B0B10"));
 
         view.setWebChromeClient(new WebChromeClient() {
@@ -156,6 +160,21 @@ public class MainActivity extends Activity {
                 }
             }
         });
+    }
+
+    /**
+     * The one thing the page cannot do for itself: leave.
+     *
+     * A web page cannot finish an Activity, so without this the app's own
+     * "exit" could only ever draw a screen that claimed to have exited. Kept to
+     * a single method that takes no arguments and returns nothing, because a
+     * JavaScript bridge is reachable by any page the WebView loads.
+     */
+    private class Host {
+        @android.webkit.JavascriptInterface
+        public void exit() {
+            runOnUiThread(MainActivity.this::finish);
+        }
     }
 
     /** Report which WebView implementation is actually in use — it is a variable. */

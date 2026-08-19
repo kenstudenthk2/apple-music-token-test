@@ -399,8 +399,11 @@ function handleBack() {
     // is free: exit straight away when nothing is playing, and confirm first
     // when a stray press would kill playback.
     if (!app.playing) {
+      // Decline the press so the Android host leaves the app. Consuming it and
+      // showing our own "Exited" screen looked like an exit while trapping the
+      // viewer inside a running app.
       exitApp();
-      return true;
+      return false;
     }
     openExitConfirm();
     return true;
@@ -453,6 +456,13 @@ function closeExitConfirm() {
 function exitApp() {
   app.playing = false;
   el("exit-dialog").removeAttribute("data-open");
+
+  // On the device, ask the host to finish the Activity. A browser tab cannot
+  // close itself, so it falls back to saying what would have happened.
+  if (window.AndroidHost && typeof window.AndroidHost.exit === "function") {
+    window.AndroidHost.exit();
+    return;
+  }
   el("exited").dataset.open = "true";
   app.screen = "exited";
 }
