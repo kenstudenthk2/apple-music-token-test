@@ -6,6 +6,7 @@
 <title>AppleTune TV — Live</title>
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/app.css">
+<link rel="stylesheet" href="styles/now-playing-v2.css">
 <style>
   /* Live-only additions. Everything else comes from the reviewed design system. */
   .boot {
@@ -165,14 +166,40 @@
 
   <!-- ===================================================== SCREEN: NOW PLAYING -->
   <section class="screen" data-screen="now">
-    <div class="now" id="now" data-playing="false">
+    <div class="now" id="now" data-state="stopped" data-idle="false" data-chrome="shown">
       <div class="now__bloom"></div>
       <div class="now__scrim"></div>
       <div class="now__body">
-        <div class="now__disc">
-          <div class="now__vinyl"></div>
-          <div class="now__label" id="now-art"></div>
+        <!--
+          The stage holds the sleeve, the record and the arm. The sleeve is the
+          only place the artwork appears, square and uncropped; the label is a
+          plain paper disc coloured from Apple's own bgColor, because a circular
+          crop of the artwork is still a crop.
+        -->
+        <div class="now__stage">
+          <div class="now__sleeve">
+            <div class="now__sleeve-art" id="now-art"></div>
+          </div>
+
+          <div class="now__disc">
+            <div class="now__platter">
+              <div class="now__vinyl">
+                <div class="now__swirl"></div>
+                <!-- A child of the vinyl, so the label turns with the record. -->
+                <div class="now__label" id="now-label">
+                  <span class="now__label-line" id="now-label-line">Apple Music</span>
+                </div>
+              </div>
+            </div>
+            <div class="now__sheen"></div>
+          </div>
+
+          <div class="now__tonearm">
+            <span class="now__tonearm-weight"></span>
+            <span class="now__tonearm-head"></span>
+          </div>
         </div>
+
         <div class="now__meta">
           <div class="now__eyebrow" id="now-source">Playing</div>
           <h1 class="now__title" id="now-title">—</h1>
@@ -196,6 +223,7 @@
           </div>
         </div>
       </div>
+      <div class="now__dim"></div>
     </div>
     <div class="hints">
       <span><kbd>BACK</kbd>Back</span>

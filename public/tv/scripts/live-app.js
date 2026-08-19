@@ -492,13 +492,41 @@ async function runSearch() {
  * Playback
  * ------------------------------------------------------------------ */
 
+/**
+ * Drive the turntable.
+ *
+ * Everything the stylesheet needs arrives as a custom property or an attribute,
+ * so this function never touches a transform directly and the CSS owns all the
+ * motion. The contract is NOW_PLAYING_V2.md sections 8 and 9.
+ */
 function renderNowPlaying(state) {
-  el("now").dataset.playing = String(state.playing);
+  const now = el("now");
+  const ratio = state.duration ? Math.min(1, state.position / state.duration) : 0;
+
+  // `starting` exists so the record can spin up rather than snapping to speed.
+  // It is transient: the stylesheet's spin-up animation runs once and the state
+  // settles to `playing`.
+  const next = state.playing
+    ? (now.dataset.state === "stopped" || now.dataset.state === "paused" ? "starting" : "playing")
+    : (state.position > 0 ? "paused" : "stopped");
+
+  if (next !== now.dataset.state) {
+    now.dataset.state = next;
+    if (next === "starting") {
+      setTimeout(() => {
+        if (now.dataset.state === "starting") now.dataset.state = "playing";
+      }, 1000);
+    }
+  }
+
+  now.style.setProperty("--now-progress", String(ratio));
+  // One rotation bound to elapsed time. The arm tracking inward is what makes
+  // the disc read as playing rather than merely spinning.
+  now.style.setProperty("--now-arm-track", String(ratio));
+
   el("now-playpause").textContent = state.playing ? "⏸" : "▶";
   el("now-elapsed").textContent = mmss(state.position);
   el("now-total").textContent = mmss(state.duration);
-  el("now-fill").style.transform =
-    `scaleX(${state.duration ? Math.min(1, state.position / state.duration) : 0})`;
 
   if (!state.item) return;
   el("now-title").textContent = state.item.title;
@@ -507,9 +535,39 @@ function renderNowPlaying(state) {
   el("mini-title").textContent = state.item.title;
   el("mini-artist").textContent = state.item.artist;
   el("miniplayer").dataset.visible = "true";
+
+  // The sleeve carries the artwork; the label is paper coloured from Apple's
+  // own palette. Never the artwork in a circle.
   fillArt(el("now-art"), state.item, 560);
   fillArt(el("mini-art"), state.item, 96);
   applyPalette(state.item);
+  applyLabelColours(state.item);
+  // A record label is a small circle. A long album name wraps into an
+  // unreadable knot there — "正宗K (新曲+精選)" became four stacked fragments.
+  // The full name is already on the right-hand column at full size, so the
+  // label carries a short form and nothing is lost.
+  const labelText = state.item.album || "Apple Music";
+  el("now-label-line").textContent =
+    labelText.length > 14 ? `${labelText.slice(0, 13)}…` : labelText;
+}
+
+/**
+ * Colour the paper label from Apple's own palette.
+ *
+ * Falls back to the design system's surfaces when Apple sent no colours, which
+ * is every library item — catalog artwork carries bgColor, library artwork does
+ * not.
+ */
+function applyLabelColours(item) {
+  const now = el("now");
+  const palette = item?.palette;
+  if (palette?.background) {
+    now.style.setProperty("--label-bg", palette.background);
+    now.style.setProperty("--label-ink", palette.primary || "#FFFFFF");
+  } else {
+    now.style.removeProperty("--label-bg");
+    now.style.removeProperty("--label-ink");
+  }
 }
 
 async function ensurePlayer(credentials) {
