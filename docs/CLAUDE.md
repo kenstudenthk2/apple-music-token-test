@@ -10,6 +10,7 @@ section you need.
 |---|---|---|
 | `PROJECT_CHARTER.md` | Everyone, once | You need a gate PASS/FAIL criterion, a rule, the RACI, or the beta protocol |
 | `decisions/` | Anyone proposing a change | A decision already exists, or you need to open a vote — see `decisions/CLAUDE.md` |
+| `research/UI_REPO_SCAN.md` | Design + frontend | You are looking for prior art or a library, and want to know what is actually usable here |
 | `research/TV_UX_RESEARCH.md` | Design + frontend | You need prior art, TV UX numbers, or Now-Playing concepts |
 | `design/DESIGN_SYSTEM.md` | Frontend | You need a component spec, a token rationale, or a wireframe |
 | `design/NAVIGATION_MODEL.md` | Frontend | You need the screen map, the BACK contract, or focus rules |
