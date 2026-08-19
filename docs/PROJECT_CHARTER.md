@@ -95,6 +95,8 @@ Every gate has a PASS criterion that a person or script can check mechanically. 
 ### G3 — TV UI Prototype (design frames the user can SEE)
 - **PASS**: clickable/navigable HTML prototype (no backend required) covering all 5 screens — Pairing/QR, Library Home, Playlist/Album detail, Search, Now Playing — rendered at 1920×1080, delivered as an Artifact URL **and** screenshots in `docs/ui/`. Human user views it and records a decision.
 - **FAIL**: fewer than 5 screens, or not viewable at 1080p, or the user cannot open it without running a build tool.
+- **Status**: 🟡 **BUILT, AWAITING USER SIGN-OFF.** All five screens exist in `public/tv/` and are published as a self-contained Artifact. Navigation was verified in Chrome end to end (pair → home → row → shelf → OK → Now Playing → BACK → nav → search → type → results) with exactly one focus ring at every step. The gate does not close until the human user completes `docs/beta/PROTOTYPE_REVIEW.md` and records a decision — per the PASS criterion, a prototype nobody has looked at is not a pass.
+- **Note on gate order**: G3 ran in parallel with G1 rather than after it, at the user's explicit direction to produce something viewable. That is a deliberate, recorded deviation from the gate order below, and it does not reduce G1's priority: if G1 fails, this UI work is sunk cost.
 
 ### G4 — D-pad Navigation
 - **PASS**, verified on the real device with a real remote (or `adb shell input keyevent` script `scripts/dpad-sweep.sh`):
