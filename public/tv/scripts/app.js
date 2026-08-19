@@ -393,14 +393,68 @@ function handleBack() {
   }
 
   if (app.screen === "home") {
-    // A real app would raise an "Exit AppleTune?" confirmation here. Never
-    // drop the user out of the app on a single BACK press.
+    // VOTE-003. Android's convention is that BACK eventually leaves the app,
+    // and being unable to leave with the button that means "leave" is bad. But
+    // here exiting stops the music, so the convention is followed only where it
+    // is free: exit straight away when nothing is playing, and confirm first
+    // when a stray press would kill playback.
+    if (!app.playing) {
+      exitApp();
+      return true;
+    }
+    openExitConfirm();
+    return true;
+  }
+
+  if (app.screen === "exit") {
+    closeExitConfirm();
     return true;
   }
 
   const previous = app.history.pop() || "home";
   show(previous, { push: false });
   return true;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Exit confirmation (VOTE-003)
+ * ------------------------------------------------------------------ */
+
+/** Where focus was before the modal opened, so it can be handed back. */
+let focusBeforeExit = null;
+
+function openExitConfirm() {
+  focusBeforeExit = document.querySelector('[data-focused="true"]');
+  app.screen = "exit";
+  el("exit-dialog").dataset.open = "true";
+  // Cancel is focused, not Exit. The destructive choice should never be the
+  // one a second stray press lands on.
+  void el("exit-dialog").offsetHeight;
+  refresh();
+  focus(el("exit-cancel"));
+}
+
+function closeExitConfirm() {
+  el("exit-dialog").removeAttribute("data-open");
+  app.screen = "home";
+  refresh();
+  if (focusBeforeExit) focus(focusBeforeExit);
+  focusBeforeExit = null;
+}
+
+/**
+ * Leave the app.
+ *
+ * A real Android build finishes the Activity here and the launcher takes over.
+ * A browser cannot close a tab it did not open, so the prototype says plainly
+ * what would have happened rather than pretending or silently doing nothing.
+ */
+function exitApp() {
+  app.playing = false;
+  el("exit-dialog").removeAttribute("data-open");
+  el("exited").dataset.open = "true";
+  app.screen = "exited";
 }
 
 
@@ -438,6 +492,9 @@ const ACTIONS = {
 
   next: () => skip(1),
   prev: () => skip(-1),
+
+  "exit-confirm": () => exitApp(),
+  "exit-cancel": () => closeExitConfirm(),
 
   type: (node) => {
     app.query += node.dataset.char;

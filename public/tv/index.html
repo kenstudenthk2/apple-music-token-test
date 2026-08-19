@@ -138,6 +138,33 @@
     </div>
   </section>
 
+  <!-- ==================================================== EXIT CONFIRM (modal) -->
+  <!--
+    VOTE-003. BACK on Home exits straight away when nothing is playing; this
+    modal appears only when a stray press would kill playback.
+  -->
+  <div class="modal" id="exit-dialog">
+    <div class="modal__panel">
+      <h2 class="modal__title">Stop playing and exit?</h2>
+      <p class="modal__body">Music is playing. Leaving AppleTune will stop it.</p>
+      <div class="modal__actions" data-focus-group="exit">
+        <div class="modal__button focusable" data-size="sm" data-focusable
+             data-action="exit-cancel" id="exit-cancel">Keep playing</div>
+        <div class="modal__button focusable" data-size="sm" data-focusable
+             data-action="exit-confirm" data-danger="true">Exit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shown in place of closing the tab, which a browser will not allow. -->
+  <div class="modal" id="exited">
+    <div class="modal__panel">
+      <h2 class="modal__title">Exited</h2>
+      <p class="modal__body">On a television the app would have closed and the
+        launcher would be showing. Reload the page to start again.</p>
+    </div>
+  </div>
+
   <!-- ===================================================== SCREEN: NOW PLAYING -->
   <section class="screen" data-screen="now">
     <div class="now" id="now" data-playing="true">
@@ -186,5 +213,8 @@
 </div>
 
 <script type="module" src="scripts/app.js"></script>
+<!-- G4 audit. Inert unless the URL carries ?audit=1, so the prototype behaves
+     normally for design review. -->
+<script type="module" src="scripts/audit.js"></script>
 </body>
 </html>

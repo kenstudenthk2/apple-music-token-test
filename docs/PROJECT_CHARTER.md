@@ -105,7 +105,7 @@ Every gate has a PASS criterion that a person or script can check mechanically. 
 - **PASS**, verified on the real device with a real remote (or `adb shell input keyevent` script `scripts/dpad-sweep.sh`):
   1. Every interactive element is reachable using only UP/DOWN/LEFT/RIGHT/CENTER/BACK;
   2. The focused element is visually unambiguous in a screenshot at every step;
-  3. BACK from any screen returns to the logical parent; BACK on Library Home exits the app;
+  3. BACK from any screen returns to the logical parent. On Home, BACK exits the app when nothing is playing, and raises an exit confirmation when playback is in progress. **Both paths are exercised.** (Amended by [VOTE-003](../docs/decisions/VOTE-003-back-at-root.md) — the original wording contradicted the navigation model and would have shipped an unguarded BACK that kills playback.);
   4. No focus trap: a scripted sweep of 200 random D-pad events never leaves focus on a non-visible or null element.
 - **FAIL**: any element reachable only by pointer, any invisible focus state, any focus trap in the 200-event sweep.
 

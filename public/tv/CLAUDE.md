@@ -13,6 +13,7 @@ no hardware keyboard. Plain HTML/CSS/ES modules, no build step, no dependencies.
 | `scripts/spatial-nav.js` | D-pad focus engine | Focus moves wrongly, or you need `init`/`focus`/`onBack` |
 | `scripts/app.js` | Screen state, rendering, playback simulation | You are wiring behaviour |
 | `scripts/demo-data.js` | Fake catalogue for the prototype | You need more or different sample content |
+| `scripts/audit.js` | The G4 D-pad audit. Inert unless the URL carries `?audit=1` | You are changing a G4 criterion, or the audit reports something puzzling |
 | `package.json` | Marks this subtree as ESM so Node can lint it | Rarely |
 
 Specs live in `docs/design/`. Read `DESIGN_SYSTEM.md` for component specs and

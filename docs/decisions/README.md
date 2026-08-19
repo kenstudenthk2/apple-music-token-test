@@ -27,3 +27,4 @@ so the reasoning survives even though the decision is not a vote.
 | [VOTE-002](VOTE-002-text-entry-method.md) | G4 | How does the user enter a search query without a keyboard? | **A — on-screen grid keyboard** (5–0) |
 | [ESCALATION-001](ESCALATION-001-phone-as-remote-input.md) | G4 | May the pairing session also carry text input from the phone? | ✅ **Option 1 — not in v1**; revisit after G5 |
 | [ESCALATION-002](ESCALATION-002-pairing-security-design.md) | G2 | How should the pairing flow be secured? | ✅ **Option A — split user_code / device_code (RFC 8628 shape)**. Endpoint design approved and **implemented**; gate G2 passed |
+| [VOTE-003](VOTE-003-back-at-root.md) | G4 | What does BACK do on Home? | **C — exit when idle, confirm while playing** (4–1, QA dissent on testability, answered by making the criterion state-explicit) |

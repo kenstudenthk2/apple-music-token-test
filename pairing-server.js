@@ -337,6 +337,41 @@ async function handleRequest(req, res, developerToken) {
     return;
   }
 
+  // The TV prototype, so the G4 audit can run on the real device through the
+  // same tunnel. Path traversal is rejected by resolving and then checking the
+  // result is still inside public/tv.
+  if (req.method === "GET" && pathname.startsWith("/tv")) {
+    const TV_ROOT = path.join(__dirname, "public", "tv");
+    const relative = pathname === "/tv" || pathname === "/tv/"
+      ? "index.html"
+      : decodeURIComponent(pathname.slice("/tv/".length));
+    const target = path.resolve(TV_ROOT, relative);
+
+    if (target !== TV_ROOT && !target.startsWith(TV_ROOT + path.sep)) {
+      sendJson(res, 403, { error: "Forbidden." });
+      return;
+    }
+    if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) {
+      sendJson(res, 404, { error: "Not found." });
+      return;
+    }
+
+    const types = {
+      ".css": "text/css; charset=utf-8",
+      ".html": "text/html; charset=utf-8",
+      ".js": "text/javascript; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+    };
+    const body = fs.readFileSync(target);
+    res.writeHead(200, {
+      "Content-Type": types[path.extname(target)] || "application/octet-stream",
+      "Content-Length": body.length,
+      "Cache-Control": "no-store",
+    });
+    res.end(body);
+    return;
+  }
+
   sendJson(res, 404, { error: "Not found." });
 }
 
