@@ -34,6 +34,18 @@ const STATE = {
   completed: 10,
 };
 
+/**
+ * Ask MusicKit what "playing" means rather than assuming it is 2.
+ *
+ * The numbers below are correct for MusicKit JS v3 today, but a version that
+ * renumbered them would break silently: the vinyl would simply stop spinning
+ * and the play button would show the wrong glyph, with no error anywhere. The
+ * SDK ships the enum, so use it when it is there.
+ */
+function playbackStates() {
+  return window.MusicKit?.PlaybackStates || STATE;
+}
+
 function musicKitReady() {
   return new Promise((resolve, reject) => {
     if (window.MusicKit) return resolve();
@@ -85,7 +97,7 @@ async function createPlayer({ developerToken, musicUserToken, appName = "AppleTu
   }
 
   function syncFromMusicKit() {
-    state.playing = music.playbackState === STATE.playing;
+    state.playing = music.playbackState === playbackStates().playing;
     state.position = music.currentPlaybackTime || 0;
     state.duration = music.currentPlaybackDuration || state.duration;
     publish();
@@ -132,7 +144,7 @@ async function createPlayer({ developerToken, musicUserToken, appName = "AppleTu
     async toggle() {
       // Ask MusicKit, not our own flag: a media key on the remote can change
       // playback without going through this wrapper at all.
-      if (music.playbackState === STATE.playing) {
+      if (music.playbackState === playbackStates().playing) {
         await music.pause();
       } else {
         await music.play();

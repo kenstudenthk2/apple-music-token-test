@@ -55,7 +55,7 @@ Prior art proving feasibility: **Radon Tunes** (`com.brkchen.music`), a working 
 | N8 | Multi-user / profile switching on one TV |
 | N9 | Chromecast / AirPlay send or receive |
 | N10 | Recommendations ("For You"), Browse/Charts tabs |
-| N11 | Any premium visual polish beyond a clean, functional 10-foot UI (animations, shaders, motion design) |
+| ~~N11~~ | ~~Any premium visual polish beyond a clean, functional 10-foot UI~~ — **REMOVED FROM N-LIST 2026-08-20 by the project owner.** Their verdict on the shipped UI: "so boring, doesn't attract user use, nothing special at all." Motion design and a convincing vinyl treatment are now **in scope**, bounded by the existing performance contract (transform and opacity only, 60fps measured on the target TV) and by burn-in safety. See `docs/design/NOW_PLAYING_V2.md`. |
 | N12 | Analytics, telemetry, crash reporting SaaS |
 | N13 | Multi-tenant / multi-user hosting of the pairing server (single-user self-host only) |
 
