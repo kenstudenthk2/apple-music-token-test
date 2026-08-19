@@ -1,0 +1,16 @@
+{
+  "name": "apple-music-token-test",
+  "version": "1.0.0",
+  "description": "Safe Apple Music Developer Token smoke test for storefront API access.",
+  "main": "test-token.js",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start": "node test-token.js",
+    "test": "node --test test-token.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

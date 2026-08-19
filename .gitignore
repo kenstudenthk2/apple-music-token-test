@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.p8
+secure/*
+!secure/README.md
+.DS_Store
+apple-music-token-test.zip
