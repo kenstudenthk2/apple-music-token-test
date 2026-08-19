@@ -250,7 +250,11 @@ function buildMatrix(version, bytes, mask) {
   // Format information, written twice.
   const format = FORMAT_M[mask];
   for (let i = 0; i < 15; i += 1) {
-    const bit = (format >> i) & 1;
+    // MSB first. Reading these LSB-first produced a symbol whose data, mask,
+    // layout and error correction were all correct and which no reader could
+    // decode, because six of the fifteen format bits were mirrored — enough to
+    // fail the format's own BCH check before a reader ever looks at the data.
+    const bit = (format >> (14 - i)) & 1;
     if (i < 6) modules[8][i] = bit;
     else if (i < 8) modules[8][i + 1] = bit;
     else if (i === 8) modules[7][8] = bit;

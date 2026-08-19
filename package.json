@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "node test-token.js",
-    "test": "node --test test-token.test.js pairing-server.test.js public/tv/scripts/api.test.js",
+    "test": "node --test test-token.test.js pairing-server.test.js public/tv/scripts/api.test.js public/tv/scripts/qr.test.js",
     "pair": "node pairing-server.js",
     "tv": "node tv-client.js",
     "prototype": "node scripts/serve-prototype.js",
