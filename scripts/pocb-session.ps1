@@ -73,12 +73,16 @@ try {
     # ---- 2. HTTPS tunnel ---------------------------------------------------
     # HTTPS is not optional: EME, and therefore Widevine, is blocked outside a
     # secure context, so plain LAN HTTP cannot work no matter how convenient.
+    # 127.0.0.1, not localhost. The pairing server binds IPv4 only, and on
+    # Windows `localhost` frequently resolves to ::1 first — cloudflared then
+    # connects to an address nothing is listening on and Cloudflare reports a
+    # 530 "origin unreachable" for a server that is demonstrably running.
     Write-Host "Opening HTTPS tunnel…" -ForegroundColor Cyan
     $log = Join-Path $env:TEMP "pocb-tunnel-$PID.log"
     if (Test-Path $log) { Remove-Item $log -Force }
 
     $tunnel = Start-Process -FilePath $cloudflared `
-        -ArgumentList "tunnel","--url","http://localhost:8787","--no-autoupdate" `
+        -ArgumentList "tunnel","--url","http://127.0.0.1:8787","--no-autoupdate" `
         -PassThru -NoNewWindow -RedirectStandardError $log
     $processes += $tunnel
 
