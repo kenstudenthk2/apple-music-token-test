@@ -597,7 +597,10 @@ renderLibrary();
 renderKeyboard();
 renderSearchResults();
 drawQrPlaceholder(el("pair-code").textContent);
-startExpiryCountdown(598);
+// 300 seconds, matching the pairing server's real SESSION_TTL_MS. A design
+// prototype that shows a different number from the shipping backend teaches
+// reviewers the wrong thing about the product.
+startExpiryCountdown(298);
 el("home-clock").textContent = greeting(new Date().getHours());
 
 init(document.getElementById("app"));
