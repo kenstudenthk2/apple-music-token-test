@@ -34,6 +34,7 @@ folder's `CLAUDE.md`, and stop there.
 | [`docs/`](docs/CLAUDE.md) | Charter, gates, rules, decisions, research, design specs | You need to know the rules, a gate criterion, or a past decision |
 | [`public/tv/`](public/tv/CLAUDE.md) | The TV app front end — screens, styles, navigation | You are building or changing anything the viewer sees on the TV |
 | [`public/activate.html`](public/CLAUDE.md) | The phone-side authorization page | ⚠️ Auth surface — read `public/CLAUDE.md` before touching |
+| [`android/`](android/CLAUDE.md) | The POC-B WebView host app (gate G1) | You are changing how the TV app hosts the WebView, or building the test APK |
 | [`scripts/`](scripts/CLAUDE.md) | Dev servers and the prototype bundler | You need to run, serve, or bundle the prototype |
 | root `*.js` | Token minting, pairing backend, TV client | ⚠️ Auth surface — see `docs/CLAUDE.md` §Auth before touching |
 

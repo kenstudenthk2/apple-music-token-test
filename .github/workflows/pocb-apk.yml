@@ -1,0 +1,74 @@
+name: Build POC-B APK
+
+# The tunnel hostname changes every time cloudflared restarts, so the harness
+# URL is an input rather than a constant. Run this workflow, paste the URL, and
+# download the APK from the run's Artifacts section.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Harness URL, including /pocb/ — e.g. https://xxxx.trycloudflare.com/pocb/"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Reject a URL that cannot work
+        run: |
+          URL='${{ inputs.url }}'
+          echo "Requested URL: $URL"
+          # HTTPS is not a style preference here: EME, and therefore Widevine,
+          # is blocked outside a secure context, so an http:// build would fail
+          # the gate for a reason that has nothing to do with the gate.
+          case "$URL" in
+            https://*) ;;
+            *) echo "::error::URL must start with https:// — EME is blocked outside a secure context."; exit 1 ;;
+          esac
+          case "$URL" in
+            */pocb/|*/pocb) ;;
+            *) echo "::error::URL should point at the harness, ending in /pocb/"; exit 1 ;;
+          esac
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug -PpocbUrl='${{ inputs.url }}' --no-daemon --stacktrace
+
+      - name: Confirm the URL was compiled in
+        working-directory: android
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          ls -lh "$APK"
+          # Cheap guard against a silently empty buildConfigField: the host
+          # string must appear in the packaged classes.
+          HOST=$(echo '${{ inputs.url }}' | sed -E 's#https://([^/]+).*#\1#')
+          if unzip -p "$APK" classes.dex | grep -qa "$HOST"; then
+            echo "OK — $HOST is present in the APK."
+          else
+            echo "::error::The harness URL is not in the built APK. The build would show the 'no URL' screen."
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocb-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
