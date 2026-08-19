@@ -13,6 +13,9 @@ no hardware keyboard. Plain HTML/CSS/ES modules, no build step, no dependencies.
 | `scripts/spatial-nav.js` | D-pad focus engine | Focus moves wrongly, or you need `init`/`focus`/`onBack` |
 | `scripts/app.js` | Screen state, rendering, playback simulation | You are wiring behaviour |
 | `scripts/demo-data.js` | Fake catalogue for the prototype | You need more or different sample content |
+| `scripts/api.js` | Apple Music API client — endpoints, item flattening, artwork URLs and palettes | You need data from Apple, or a shape changed |
+| `scripts/api.test.js` | Tests for the above. Runs in `npm test` | You changed `api.js` |
+| `scripts/player.js` | MusicKit wrapper — queue, transport, state snapshots | You are wiring playback |
 | `scripts/audit.js` | The G4 D-pad audit. Inert unless the URL carries `?audit=1` | You are changing a G4 criterion, or the audit reports something puzzling |
 | `package.json` | Marks this subtree as ESM so Node can lint it | Rarely |
 
@@ -54,3 +57,27 @@ Specs live in `docs/design/`. Read `DESIGN_SYSTEM.md` for component specs and
 npm run prototype        # http://localhost:8788/tv/  — no .p8 needed
 npm run build:prototype  # single-file dist/prototype.html for review
 ```
+
+## Live data vs the prototype
+
+`demo-data.js` is the design prototype's fake catalogue. `api.js` and
+`player.js` are the real thing. Both exist on purpose: the prototype must keep
+rendering with the network off so it stays reviewable as a single file, and the
+real app must not carry fake data.
+
+Two rules that follow from that:
+
+1. **`api.js` and `player.js` must never be imported by the prototype path.**
+   If the review build starts needing a token, it has stopped being a
+   prototype.
+2. **Artwork colours come from Apple**, via `Artwork.bgColor` and
+   `textColor1`–`textColor4`. Do not add client-side colour extraction — it was
+   considered and rejected in `docs/research/TV_UX_RESEARCH.md` §1 because
+   Apple already ships the palette.
+
+## Why player.js cannot cause a 30-second preview
+
+Full-track playback depends on two settings in the Android host
+(`android/.../MainActivity.java`): granting `PROTECTED_MEDIA_ID` and disabling
+the user-gesture requirement. Nothing in `player.js` can cause or fix a preview
+fallback. If playback regresses, check `MainActivity.configure()` first.
