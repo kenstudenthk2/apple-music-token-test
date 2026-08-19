@@ -2,8 +2,9 @@
 
 - **GATE**: G4 — D-pad Navigation
 - **CLASS**: Auth / login (charter §4.5) — **human decision, not a vote**
-- **STATUS**: awaiting the human user. Work on this feature is paused. Nothing
-  else is blocked: v1 search ships on the grid keyboard ([VOTE-002](VOTE-002-text-entry-method.md)).
+- **STATUS**: ✅ **ANSWERED — Option 1: not in v1.** Decided by the project owner
+  on 2026-08-19 ("later"), after reviewing the G3 prototype and using the grid
+  keyboard first-hand. Revisit after gate G5.
 - **RAISED BY**: UX Architect, via the navigation model's text-entry analysis.
 
 ## What is being asked
@@ -58,4 +59,14 @@ thing second.
 
 ## Answer
 
-_Awaiting the human user._
+**Option 1 — not in v1.** The project owner reviewed the grid keyboard in the G3
+prototype and chose to defer phone-as-remote rather than pursue it now.
+
+Consequences:
+
+- Nothing to build, and nothing new to secure. The pairing session keeps its
+  single narrow purpose: move one token, once, then destroy itself.
+- The decision was taken *after* using the keyboard, not before — so it is a
+  judgement about real friction, not a guess about it.
+- This stays open as a v2 candidate. If beta testing at G6 shows search being
+  abandoned, this is the first thing to reconsider.

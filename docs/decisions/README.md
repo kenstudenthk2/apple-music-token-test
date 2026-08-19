@@ -25,5 +25,5 @@ so the reasoning survives even though the decision is not a vote.
 |---|---|---|---|
 | [VOTE-001](VOTE-001-now-playing-concept.md) | G3 | Which Now Playing treatment ships in v1? | **A — rotating vinyl over an adaptive ambient wash** (4–1, QA dissent on GPU risk, carried forward as an fps check at G4) |
 | [VOTE-002](VOTE-002-text-entry-method.md) | G4 | How does the user enter a search query without a keyboard? | **A — on-screen grid keyboard** (5–0) |
-| [ESCALATION-001](ESCALATION-001-phone-as-remote-input.md) | G4 | May the pairing session also carry text input from the phone? | ⏸ **awaiting the human user** — auth surface, not votable |
+| [ESCALATION-001](ESCALATION-001-phone-as-remote-input.md) | G4 | May the pairing session also carry text input from the phone? | ✅ **Option 1 — not in v1**; revisit after G5 |
 | [ESCALATION-002](ESCALATION-002-pairing-security-design.md) | G2 | How should the pairing flow be secured? | ✅ **Option A — split user_code / device_code (RFC 8628 shape)**. Endpoint design approved and **implemented**; gate G2 passed |

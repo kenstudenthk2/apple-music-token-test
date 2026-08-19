@@ -113,3 +113,35 @@ Whether a real Apple Music track will play end-to-end inside an Android TV
 WebView. That is gate **G1 / POC-B** and it needs a physical device. Everything
 in this prototype is wasted effort if that test fails — so it stays the highest
 risk on the register until it is run.
+
+---
+
+# Result — 2026-08-19
+
+**G3 signed off by the project owner.** The gate is closed.
+
+| Question | Answer |
+|---|---|
+| 1. Keep the rotating vinyl, or drop to the conventional blurred backdrop? | **Keep** |
+| 2. Is the shelf order right — Recently Played / Made For You / Your Library / New Releases? | **Yes, as drawn** |
+| 3. Pursue phone-as-remote typing after using the grid keyboard? | **Later** — recorded as [ESCALATION-001](../decisions/ESCALATION-001-phone-as-remote-input.md), Option 1 |
+| 4. Anything missing? | **No** |
+
+## What this settles
+
+- **VOTE-001 stands.** The vinyl won 4–1, and the dissenting vote — QA's concern
+  that a rotating layer would stutter on weak TV hardware — is now overridden by
+  the owner. It is *not* dismissed: the fps check at G4 still applies, and the
+  fallback to a static backdrop remains one CSS line away because the disc and
+  the wash are separate layers.
+- **The Home shelf order is frozen** for v1. Changing it later is a scope change.
+- **Search ships on the grid keyboard alone.** Phone-as-remote is a v2 candidate,
+  reconsidered first if beta testing at G6 shows search being abandoned.
+
+## Not captured
+
+The per-task observations in the form above — the key-press count to first
+playback, focus-ring visibility, whether the remote-mashing sweep ever lost
+focus — were not recorded. The gate asked for a decision and got one, so this
+is not a blocker. It does mean G4 has no prototype-stage baseline to compare
+its real-device D-pad sweep against, and will have to establish one itself.
