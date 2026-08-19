@@ -11,7 +11,8 @@
     "pair": "node pairing-server.js",
     "tv": "node tv-client.js",
     "prototype": "node scripts/serve-prototype.js",
-    "build:prototype": "node scripts/build-prototype.js"
+    "build:prototype": "node scripts/build-prototype.js",
+    "token-lifetime": "node scripts/token-lifetime.js"
   },
   "engines": {
     "node": ">=18"
