@@ -38,10 +38,22 @@ class ApiError extends Error {
 function artworkUrl(artwork, size) {
   if (!artwork || !artwork.url) return null;
   const pixels = Math.round(size);
+
   return artwork.url
+    // Older and regional catalogue entries still carry http:// artwork. The app
+    // is served over HTTPS and the WebView is set to MIXED_CONTENT_NEVER_ALLOW,
+    // so those images are blocked before a request is even made — the tile just
+    // stays empty. The image host serves the same path over TLS.
+    .replace(/^http:\/\//i, "https://")
     .replace("{w}", String(pixels))
     .replace("{h}", String(pixels))
-    .replace("{f}", "jpg");
+    // The crop code. Not every response includes it, but the ones that do would
+    // otherwise keep a literal "{c}" in the path and 404.
+    .replace("{c}", "bb")
+    .replace("{f}", "jpg")
+    // Anything left is a placeholder Apple added that we do not know about.
+    // Dropping it is far better than requesting a URL with braces in it.
+    .replace(/\{[a-z]+\}/gi, "");
 }
 
 /**

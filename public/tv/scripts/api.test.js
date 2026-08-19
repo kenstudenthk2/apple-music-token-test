@@ -36,9 +36,13 @@ const ARTWORK = {
 
 
 test("artworkUrl substitutes the exact pixel size Apple's template asks for", () => {
+  // This assertion originally expected "288x288{c}.jpg" — it encoded the very
+  // defect it was meant to guard, leaving an unsubstituted crop code in the
+  // path. The URL 404s, the tile stays empty, and nothing says why. Korean and
+  // other older catalogue entries were the ones that surfaced it.
   assert.equal(
     artworkUrl(ARTWORK, 288),
-    "https://is1-ssl.mzstatic.com/image/thumb/abc/288x288{c}.jpg"
+    "https://is1-ssl.mzstatic.com/image/thumb/abc/288x288bb.jpg"
   );
   // Fractional sizes come from devicePixelRatio maths; Apple wants integers.
   assert.match(artworkUrl(ARTWORK, 287.6), /288x288/);
@@ -249,4 +253,26 @@ test("a genuinely expired user token still reaches onAuthLost", async () => {
     return true;
   });
   assert.equal(lost.length, 1);
+});
+
+test("artwork over http is upgraded, because the WebView blocks mixed content", () => {
+  // Older and regional catalogue entries still carry http:// artwork. Served
+  // over HTTPS with MIXED_CONTENT_NEVER_ALLOW, those images are blocked before
+  // a request is made and the tile simply stays empty.
+  const url = artworkUrl({ url: "http://is1.mzstatic.com/image/abc/{w}x{h}bb.{f}" }, 288);
+  assert.ok(url.startsWith("https://"), url);
+  assert.ok(!url.includes("http://"));
+});
+
+test("every placeholder is substituted, including the crop code", () => {
+  // A literal {c} left in the path 404s, and the tile stays empty with no clue
+  // as to why.
+  const url = artworkUrl({ url: "https://is1.mzstatic.com/image/abc/{w}x{h}{c}.{f}" }, 288);
+  assert.equal(url, "https://is1.mzstatic.com/image/abc/288x288bb.jpg");
+  assert.doesNotMatch(url, /[{}]/);
+});
+
+test("an unknown placeholder is dropped rather than requested literally", () => {
+  const url = artworkUrl({ url: "https://is1.mzstatic.com/image/abc/{w}x{h}{c}{sr}.{f}" }, 288);
+  assert.doesNotMatch(url, /[{}]/, url);
 });

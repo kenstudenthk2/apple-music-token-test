@@ -113,7 +113,13 @@ function artNode(item, size) {
   const img = document.createElement("img");
   img.alt = "";
   img.decoding = "async";
-  img.addEventListener("error", () => img.remove(), { once: true });
+  img.addEventListener("error", () => {
+    // Say which URL failed. MainActivity mirrors console output into logcat, so
+    // "some covers do not load" becomes a specific URL to look at rather than a
+    // pattern someone has to guess at from the sofa.
+    console.warn(`[live] artwork failed: ${url}`);
+    img.remove();
+  }, { once: true });
   img.src = url;
   return img;
 }
