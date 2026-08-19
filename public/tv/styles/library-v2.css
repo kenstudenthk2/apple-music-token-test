@@ -1,0 +1,499 @@
+/* ==========================================================================
+   AppleTune TV — Library V2 + browse motion
+   Spec: docs/design/LIBRARY_V2.md   Research: docs/research/MOTION_RESEARCH.md
+
+   Load order:  tokens.css  ->  app.css  ->  library-v2.css
+   This sheet OVERRIDES app.css. It never redefines a token from tokens.css.
+
+   PERFORMANCE CONTRACT (tokens.css header, public/tv/CLAUDE.md contract 2):
+     ANIMATE ONLY   transform, opacity
+     NEVER ANIMATE  width, height, top, left, right, bottom, margin, padding,
+                    box-shadow, filter, border-width, background-color,
+                    border-radius
+   Every box-shadow and background in this file is STATIC. Elevation changes
+   cross-fade a pre-painted layer with opacity. Focus growth is scale().
+
+   MARKUP THE DEVELOPER MUST ADD is flagged  /* NEW */ /*  at each rule.
+   CUSTOM PROPERTIES JS MUST WRITE are flagged  /* JS WRITES */ /*.
+   Full contract: LIBRARY_V2.md sections 10 and 11.
+   ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   1. LOCAL TOKENS
+   Declared here, not in tokens.css, so nothing outside the library changes.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Library tile is 240px, not the 288px home-shelf tile: three shelves plus
+     a peek have to fit in 648px of vertical viewport. */
+  --lib-tile:      15rem;             /* 240px square art                     */
+  --lib-gap:       var(--space-5);    /*  48px — clearance for the disc slide */
+  --lib-pitch:     18rem;             /* 288px = tile + gap; one column step  */
+  --lib-label:     4.5rem;            /*  72px label block                    */
+  --lib-shelf-h:   24rem;             /* 384px = 56 + 16 + 240 + 72           */
+
+  /* 160ms is the only focus duration endorsed by BOTH tokens.css section 12
+     (>=140ms or it reads as flicker) and MOTION_RESEARCH P2 (<=160ms or the
+     remote feels broken). See LIBRARY_V2.md section 4. */
+  --dur-lib-focus: 160ms;
+  --dur-lib-ring:  180ms;
+  --dur-lib-row:   240ms;
+  --dur-lib-enter: 200ms;
+  --dur-lib-screen-in:  280ms;
+  --dur-lib-screen-out: 240ms;
+
+  --lib-ring-delay:  30ms;   /* the settle: tile moves first, ring lands on it */
+  --lib-stagger:     60ms;   /* 30-80ms band; 60 is set by the layer budget    */
+  --lib-stagger-cap: 5;      /* delays stop growing after index 5              */
+
+  --lib-focus-scale: 1.06;   /* 7.2px per side on a 240px tile                 */
+  --lib-focus-rise:  0.75rem;/* 12px                                           */
+
+  --lib-disc-rest:   1.5rem; /* 24px of record showing past the sleeve         */
+  --lib-disc-out:    2.5rem; /* 40px when focused; 40 + 7 scale < 48 gap       */
+
+  --lib-shelf-dim:   0.5;    /* opacity of a shelf that does not hold focus    */
+
+  /* Navigation travel. 3rem = 48px: readable as direction at 3m, small enough
+     that a 280ms slide never feels like a page turn. */
+  --lib-nav-travel:  3rem;
+  --lib-screen-recede: 0.97;
+}
+
+
+/* ==========================================================================
+   2. SCREEN TRANSITIONS — the browse motion
+   app.css cross-fades every screen with a 1.5% scale. That has no spatial
+   relationship, so the app reads as slides rather than places. Here a screen
+   ARRIVES from the side it lives on and the screen you left RECEDES behind it,
+   still there, waiting. BACK mirrors it exactly.
+
+   JS WRITES: data-nav="forward" | "back" on .app, set BEFORE data-active flips.
+   ========================================================================== */
+
+.screen {
+  /* Overrides app.css: the resting hidden state is now direction-dependent,
+     so the base state carries no transform of its own. */
+  transform: none;
+  transition:
+    opacity   var(--dur-lib-screen-out) var(--ease-out),
+    transform var(--dur-lib-screen-out) var(--ease-out);
+}
+
+.screen[data-active="true"] {
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    opacity   var(--dur-lib-screen-in) var(--ease-out),
+    transform var(--dur-lib-screen-in) var(--ease-out);
+}
+
+/* Going deeper: the new screen comes in from the right, the old one recedes.
+   P3 physicality — it does not fly away, it steps back and stays. */
+.app[data-nav="forward"] .screen {
+  transform: scale(var(--lib-screen-recede));
+}
+/* JS WRITES data-entering="true" on the screen that is about to become active,
+   for one frame before data-active flips, and removes it on transitionend.
+   Both screens are momentarily :not([data-active]), so an attribute is the only
+   way CSS can tell "receding" from "arriving". */
+.app[data-nav="forward"] .screen[data-entering="true"] {
+  transform: translate3d(var(--lib-nav-travel), 0, 0);
+}
+
+/* Going back: exact mirror. Arrival from the left is the only cue that
+   distinguishes BACK from a forward move without any chrome. */
+.app[data-nav="back"] .screen {
+  transform: scale(var(--lib-screen-recede));
+}
+.app[data-nav="back"] .screen[data-entering="true"] {
+  transform: translate3d(calc(var(--lib-nav-travel) * -1), 0, 0);
+}
+
+/* Detail artwork counter-scale. A cross-fade without it reads as a lazy
+   dissolve — MOTION_RESEARCH section 5, technique 7. */
+.screen[data-active="true"] .detail__art {
+  transform: scale(1);
+  transition: transform var(--dur-lib-screen-in) var(--ease-out);
+}
+.screen:not([data-active="true"]) .detail__art {
+  transform: scale(1.03);
+}
+
+
+/* ==========================================================================
+   3. LIBRARY PAGE FURNITURE
+   ========================================================================== */
+
+/* NEW element: .library__head wraps the screen title above the shelves. */
+.library__head {
+  position: absolute;
+  top: var(--nav-height);
+  left: 0;
+  right: 0;
+  height: 4.75rem;              /* 76px: 44px title + 32px margin */
+  display: flex;
+  align-items: flex-start;
+}
+
+.library__title {
+  margin: 0;
+  font-size: var(--fs-title-lg);      /* 44px */
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-title);
+  color: var(--text-primary);
+}
+
+/* A STATIC art wash. Deliberately not animated — LIBRARY_V2.md rejection 5.
+   Painted once, never invalidated, costs zero animated layers. */
+.screen[data-screen="library"] .screen__body::before {
+  content: "";
+  position: absolute;
+  inset: -5vh -5vw;
+  background: var(--art-bloom);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* The shelves box starts below the page title rather than below the nav. */
+.screen[data-screen="library"] .shelves {
+  top: calc(var(--nav-height) + 4.75rem);
+  /* app.css reserves --nowplaying-h at the bottom, which is the bar's height but
+     not the gap beneath it. Measured on screen, the next shelf's peek ran 48px
+     under the now-playing bar — and the peek is the whole point of showing the
+     next row, so it must not be the part that gets covered. */
+  bottom: calc(var(--nowplaying-h) + var(--space-5));
+}
+
+
+/* ==========================================================================
+   4. SHELVES — vertical stack
+   ========================================================================== */
+
+/* JS WRITES --shelf-y on .shelves__track, e.g. "-24rem". It is read by this
+   element's own transform ONLY; no child reads it (per-child style recalc is
+   the trap flagged in MOTION_RESEARCH section 6). */
+.shelves__track {
+  gap: var(--lib-gap);
+  transform: translate3d(0, var(--shelf-y, 0px), 0);
+  transition: transform var(--dur-lib-row) var(--ease-in-out);
+  /* app.css declares will-change permanently here. Gate it: permanent
+     will-change exhausts TV VRAM (tokens.css header). */
+  will-change: auto;
+}
+.shelves[data-moving="v"] .shelves__track { will-change: transform; }
+
+.shelf {
+  /* The only per-shelf animated property. Two shelves change on a row move;
+     that is the whole neighbour-differentiation system. */
+  opacity: var(--lib-shelf-dim);
+  transition: opacity var(--dur-lib-enter) var(--ease-out);
+}
+.shelf[data-active="true"] { opacity: 1; }
+
+.shelf__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  height: 3.5rem;                     /* 56px */
+  margin-bottom: var(--space-2);      /* 16px art headroom for the focus rise */
+}
+
+/* NEW element: the count beside each shelf heading. Secondary confirmation of
+   kind, for the user who does read. */
+.shelf__count {
+  font-size: var(--fs-body);          /* 24px — at the readability floor */
+  font-weight: var(--fw-regular);
+  color: var(--text-tertiary);
+  letter-spacing: var(--ls-body);
+}
+
+.shelf__viewport { overflow: visible; }
+
+/* JS WRITES --row-x on each .shelf__row, in whole --lib-pitch steps. */
+.shelf__row {
+  gap: var(--lib-gap);
+  transform: translate3d(var(--row-x, 0px), 0, 0);
+  transition: transform var(--dur-lib-row) var(--ease-in-out);
+  will-change: auto;
+}
+.shelves[data-moving="h"] .shelf[data-active="true"] .shelf__row {
+  will-change: transform;
+}
+
+
+/* ==========================================================================
+   5. TILE — the object, and its focus feel
+   ========================================================================== */
+
+.tile {
+  width: var(--lib-tile);
+  /* The disc sits behind the art and pokes out to the right; it must not be
+     clipped, and the tile must establish a stacking context for it. */
+  position: relative;
+  isolation: isolate;
+  transform-origin: center bottom;    /* grows UP out of the shelf */
+  transform: translate3d(0, 0, 0) scale(1);
+  transition: transform var(--dur-lib-focus) var(--ease-out);
+}
+
+.tile__art {
+  width: var(--lib-tile);
+  height: var(--lib-tile);
+  position: relative;
+  z-index: 2;                          /* above .tile__disc */
+}
+
+.tile[data-focused="true"] {
+  transform: translate3d(0, calc(var(--lib-focus-rise) * -1), 0)
+             scale(var(--lib-focus-scale));
+}
+
+/* The settle. The tile is already visibly moving before the ring starts to
+   appear, so the ring reads as landing on it rather than switching on.
+   180ms + 30ms delay; the ring is at ~50% by 120ms, so nothing is lost. */
+.tile::after {
+  transition: opacity var(--dur-lib-ring) var(--ease-out) var(--lib-ring-delay);
+}
+.tile:not([data-focused="true"])::after {
+  /* Leaving is immediate: two rings must never be visible at once. */
+  transition-delay: 0ms;
+  transition-duration: var(--dur-lib-focus);
+}
+
+/* During a VERTICAL row change the outgoing tile lives inside the outgoing
+   shelf, which is already being composited as a group by that shelf's opacity
+   transition. Cancelling its own transitions here is what keeps the worst
+   moment at exactly 6 layers instead of 8 — LIBRARY_V2.md section 8. */
+.shelves[data-moving="v"] .shelf:not([data-active="true"]) .tile,
+.shelves[data-moving="v"] .shelf:not([data-active="true"]) .tile::after,
+.shelves[data-moving="v"] .shelf:not([data-active="true"]) .tile__disc {
+  transition: none;
+}
+
+.tile__label {
+  height: var(--lib-label);
+  transition: opacity var(--dur-lib-focus) var(--ease-out);
+}
+
+
+/* --------------------------------------------------------------------------
+   5.1 SILHOUETTE: PLAYLIST = A STACK
+   Two plates behind the sleeve, 8px and 16px down-right, stepping darker.
+   Built entirely from a STATIC three-value box-shadow: no extra element, no
+   extra decode, no extra layer, and it is never animated.
+   Rejected alternative: a four-up artwork mosaic — it composites artworks,
+   which Apple's Identity Guidelines forbid, and costs 4 decodes per tile.
+   -------------------------------------------------------------------------- */
+.tile[data-kind="playlist"] .tile__art {
+  box-shadow:
+    0.5rem 0.5rem 0 -0.125rem var(--surface-3),   /*  8px plate */
+    1rem   1rem   0 -0.25rem  var(--surface-2),   /* 16px plate */
+    0 0 0 0.0625rem var(--surface-hairline),
+    var(--elev-2);
+}
+
+
+/* --------------------------------------------------------------------------
+   5.2 SILHOUETTE: ALBUM = SLEEVE WITH THE RECORD SHOWING
+   NEW element: <span class="tile__disc"></span>, first child of an album tile.
+   Same diameter as the sleeve, sitting behind it, protruding 24px at rest.
+   The entire disc is one pre-painted background stack, rasterised once.
+   -------------------------------------------------------------------------- */
+.tile[data-kind="album"] .tile__disc {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--lib-tile);
+  height: var(--lib-tile);
+  border-radius: 50%;
+  z-index: 1;                          /* behind .tile__art */
+  pointer-events: none;
+  background:
+    /* two groove rings, coarse on purpose: anything under ~2px moires on a
+       1080p surface upscaled to a 4K panel (MOTION_RESEARCH section 6) */
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255, 255, 255, 0.055) 0 0.125rem,
+      rgba(255, 255, 255, 0.000) 0.125rem 0.5rem),
+    /* The SAME material tokens now-playing-v2.css declares for the record, so
+       the disc in the library and the disc on the player are one object. The
+       fallbacks let this sheet load without now-playing-v2.css present. */
+    radial-gradient(circle at 38% 32%,
+      var(--vinyl-lift, #26262F) 0%,
+      var(--vinyl-body, #16161C) 52%,
+      var(--vinyl-edge, #050508) 100%);
+  box-shadow:
+    inset -0.0625rem 0 0 rgba(255, 255, 255, 0.12),  /* rim light on the lip */
+    var(--elev-2);
+  transform: translate3d(var(--lib-disc-rest), 0, 0);
+  transition: transform var(--dur-lib-focus) var(--ease-out);
+}
+
+/* The record eases further out of the sleeve when you look at it.
+   16px of travel: over the 2px visibility floor at 3m, and 40 + 7px of scale
+   growth = 47px against a 48px gap, so it never touches its neighbour. */
+.tile[data-kind="album"][data-focused="true"] .tile__disc,
+.tile[data-kind="album"][data-playing="true"] .tile__disc {
+  transform: translate3d(var(--lib-disc-out), 0, 0);
+}
+
+
+/* --------------------------------------------------------------------------
+   5.3 SILHOUETTE: ARTIST = A CIRCLE
+   Only artist PORTRAITS are circle-cropped, matching Apple Music's own
+   clients. Album and playlist artwork is never cropped anywhere in this sheet.
+   -------------------------------------------------------------------------- */
+.tile[data-kind="artist"] .tile__art {
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.0625rem var(--surface-hairline), var(--elev-2);
+}
+.tile[data-kind="artist"] .tile__art img { border-radius: 50%; }
+.tile[data-kind="artist"]::after { border-radius: 50%; }
+
+.tile[data-kind="artist"] .tile__title,
+.tile[data-kind="artist"] .tile__subtitle { text-align: center; }
+
+
+/* ==========================================================================
+   6. ENTRY STAGGER
+   A one-shot keyframe is correct HERE and nowhere else in this sheet: entry
+   cannot be triggered rapidly, so P4's transitions-not-keyframes rule does
+   not bite. Focus and row movement remain transitions.
+
+   JS WRITES --i ONCE at render, and data-enter="1" on the first 6 tiles of the
+   first two shelves / the first 10 list rows. Nothing else opts in.
+   ========================================================================== */
+@keyframes lib-item-in {
+  from { transform: translate3d(0, 0.875rem, 0); opacity: 0; }
+  to   { transform: translate3d(0, 0, 0);        opacity: 1; }
+}
+
+.shelf__row > .tile[data-enter="1"],
+.list__rail > .list__track[data-enter="1"] {
+  animation: lib-item-in var(--dur-lib-enter) var(--ease-out) both;
+  /* Capped at index 5 = 300ms. A 200-item list reveals in exactly the same
+     500ms as a 6-item one. Concurrency = 200/60 = at most 4 live layers. */
+  animation-delay: calc(min(var(--i, 0), var(--lib-stagger-cap)) * var(--lib-stagger));
+}
+
+/* Stagger is decorative and must never block input. Item 0 has zero delay, and
+   the focus ring's opacity is independent of the entry animation, so focus is
+   visible on frame 1 whatever the cascade is doing. */
+.tile[data-enter="1"][data-focused="true"] { animation-delay: 0ms; }
+
+
+/* ==========================================================================
+   7. LIST — the 200+ item case
+   ========================================================================== */
+
+/* NEW element: .list__rail wraps every .list__track and is the ONLY thing that
+   moves. scrollTop is never used (public/tv/CLAUDE.md contract 3).
+   JS WRITES --list-y on it. */
+.list__rail {
+  transform: translate3d(0, var(--list-y, 0px), 0);
+  transition: transform var(--dur-lib-row) var(--ease-in-out);
+  will-change: auto;
+}
+.list[data-moving="true"] .list__rail { will-change: transform; }
+
+.list__track {
+  /* Offscreen rows skip layout, paint and style entirely. Not an animated
+     property, so the perf contract is untouched. This is what makes 200 rows
+     cost the same as 12. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--list-row-h);
+  /* A full-width row scaled 6% pushes its own ends past the clip edge and
+     slices off the track number and duration, so scale stays cancelled
+     (as in app.css) and weight comes from a 4px nudge instead. */
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--dur-lib-focus) var(--ease-out);
+}
+
+.list__track[data-focused="true"] {
+  transform: translate3d(0.25rem, 0, 0);   /* 4px — the only transform here */
+}
+
+/* will-change is NEVER set on a .list__track: 200 promoted layers would
+   exhaust TV VRAM long before anything moved. */
+
+
+/* ==========================================================================
+   8. PLAYBACK HANDOFF
+   The one place in the library where the delight budget is spent, because it
+   happens once every few minutes rather than hundreds of times a session (P1).
+   ========================================================================== */
+
+.miniplayer {
+  /* translateY in PERCENT is relative to the element's own height (P3), so
+     this stays correct at 720p, 1080p and 4K without a single new number. */
+  transform: translate3d(0, 100%, 0);
+  transition:
+    opacity   var(--dur-normal) var(--ease-out-soft),
+    transform 260ms             var(--ease-out-soft);
+}
+
+.miniplayer[data-visible="true"] {
+  transform: translate3d(0, 0, 0);
+}
+
+.miniplayer__art {
+  transform: scale(1);
+  transition: transform 300ms var(--ease-out);
+}
+.miniplayer:not([data-visible="true"]) .miniplayer__art {
+  transform: scale(1.06);      /* counter-scale: never from nothing (P3) */
+}
+
+
+/* ==========================================================================
+   9. REDUCED MOTION
+   tokens.css section 16 collapses durations to 1ms globally. It does NOT zero
+   animation-delay, so a 300ms cascade would survive as a 300ms WAIT with no
+   motion — worse than either alternative.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+
+  /* 1. Kill the stagger completely, delay included. */
+  .shelf__row > .tile[data-enter="1"],
+  .list__rail > .list__track[data-enter="1"] {
+    animation-delay: 0ms !important;
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+  .tile::after { transition-delay: 0ms !important; }
+
+  /* 2. Decorative transforms are removed, not merely made instant.
+        What remains is the affordance: ring, fill, reduced scale. */
+  .tile[data-focused="true"] {
+    transform: scale(var(--focus-scale));   /* tokens drops this to 1.04 */
+  }
+  .tile[data-kind="album"] .tile__disc,
+  .tile[data-kind="album"][data-focused="true"] .tile__disc {
+    transform: translate3d(var(--lib-disc-rest), 0, 0);
+  }
+  .miniplayer__art,
+  .miniplayer:not([data-visible="true"]) .miniplayer__art {
+    transform: none;
+  }
+  .screen[data-active="true"] .detail__art,
+  .screen:not([data-active="true"]) .detail__art {
+    transform: none;
+  }
+
+  /* 3. Screens stop travelling sideways. Direction is a nicety; a 48px
+        instant jump is not. Screens simply become visible. */
+  .app[data-nav="forward"] .screen,
+  .app[data-nav="back"] .screen,
+  .app[data-nav="forward"] .screen[data-entering="true"],
+  .app[data-nav="back"] .screen[data-entering="true"] {
+    transform: none;
+  }
+
+  /* KEPT as instant jumps, not removed: these positions are INFORMATION —
+     which part of a long collection you are looking at. Reduced motion is a
+     comfort preference, not a request to stop navigating. */
+  .shelves__track { transform: translate3d(0, var(--shelf-y, 0px), 0); }
+  .shelf__row     { transform: translate3d(var(--row-x, 0px), 0, 0); }
+  .list__rail     { transform: translate3d(0, var(--list-y, 0px), 0); }
+}

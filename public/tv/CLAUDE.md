@@ -19,7 +19,9 @@ no hardware keyboard. Plain HTML/CSS/ES modules, no build step, no dependencies.
 | `scripts/live-app.js` | The live application — screens, navigation, playback wiring | You are changing live behaviour |
 | `live.html` | Markup for the live app. Loads `live-app.js` | You are adding or changing a live screen |
 | `now-v2.html` | Preview harness for the Now Playing redesign. Ships nothing | You are judging the redesign before it replaces the live screen |
-| `styles/now-playing-v2.css` | The redesign. Not yet wired into the live app | You are implementing or reviewing V2 |
+| `styles/now-playing-v2.css` | The Now Playing redesign. Not yet wired into the live app | You are implementing or reviewing V2 |
+| `library-v2.html` | Preview harness for the Library redesign. Ships nothing | You are judging the Library redesign |
+| `styles/library-v2.css` | The Library redesign. Not yet wired into the live app | You are implementing or reviewing V2 |
 | `scripts/audit.js` | The G4 D-pad audit. Inert unless the URL carries `?audit=1` | You are changing a G4 criterion, or the audit reports something puzzling |
 | `package.json` | Marks this subtree as ESM so Node can lint it | Rarely |
 

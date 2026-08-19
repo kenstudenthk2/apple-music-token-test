@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library V2 — preview</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+<link rel="stylesheet" href="styles/now-playing-v2.css">
+<link rel="stylesheet" href="styles/library-v2.css">
+<style>
+  /* Preview harness only. Nothing here ships. */
+  .preview-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 1.2vh;
+    transform: translateX(-50%);
+    font-size: var(--fs-caption);
+    color: var(--text-tertiary);
+    display: flex;
+    gap: var(--space-4);
+    z-index: 9999;
+  }
+  .preview-hint kbd {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: .1em .5em;
+    margin-right: .4em;
+    color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app" data-nav="forward">
+  <section class="screen" data-screen="library" data-active="true">
+    <div class="screen__body">
+
+      <nav class="nav" data-focus-group="nav-library">
+        <div class="nav__brand">AppleTune</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable>Home</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-current="true">Library</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable>Search</div>
+      </nav>
+
+      <div class="library__head">
+        <h1 class="library__title">Your Library</h1>
+      </div>
+
+      <div class="shelves" data-moving="none">
+        <!-- Shelves are rendered by scripts/library-v2-preview.js so the three
+             item kinds are built from one function and cannot drift apart. -->
+        <div class="shelves__track"></div>
+      </div>
+
+      <div class="miniplayer" data-visible="true">
+        <div class="miniplayer__art"></div>
+        <div class="miniplayer__text">
+          <div class="miniplayer__title">Choosin' Texas</div>
+          <div class="miniplayer__artist">Ella Langley</div>
+        </div>
+        <div class="miniplayer__hint">Now playing</div>
+      </div>
+
+    </div>
+  </section>
+</div>
+
+<div class="preview-hint">
+  <span><kbd>▲ ▼</kbd>Change shelf</span>
+  <span><kbd>◀ ▶</kbd>Move along a shelf</span>
+  <span><kbd>OK</kbd>Press feedback</span>
+</div>
+
+<script type="module" src="scripts/library-v2-preview.js"></script>
+</body>
+</html>
