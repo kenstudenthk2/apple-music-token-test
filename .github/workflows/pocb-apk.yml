@@ -30,9 +30,12 @@ jobs:
             https://*) ;;
             *) echo "::error::URL must start with https:// — EME is blocked outside a secure context."; exit 1 ;;
           esac
+          # Any page the app can host: the launcher, the prototype, the live
+          # app, or the POC-B harness. Rejecting everything but /pocb/ was too
+          # narrow once one APK had to reach several targets.
           case "$URL" in
-            */pocb/|*/pocb) ;;
-            *) echo "::error::URL should point at the harness, ending in /pocb/"; exit 1 ;;
+            */tv/*|*/pocb/|*/pocb) ;;
+            *) echo "::error::URL should point at /tv/... or /pocb/"; exit 1 ;;
           esac
 
       - name: Set up JDK 17

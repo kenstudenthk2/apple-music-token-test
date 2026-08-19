@@ -96,10 +96,13 @@ try {
     }
     if (-not $base) { throw "The tunnel did not report a hostname. See $log" }
 
-    $harness = "$base/pocb/"
+    # The launcher, not a single target: one APK can carry one package name,
+    # so a single install has to reach every test page rather than making
+    # anyone uninstall and reinstall between them.
+    $harness = "$base/tv/launcher.html"
     Write-Host ""
-    Write-Host "  Harness : $harness" -ForegroundColor Green
-    Write-Host "  Prototype pairing test also available at $base" -ForegroundColor DarkGray
+    Write-Host "  Launcher : $harness" -ForegroundColor Green
+    Write-Host "  Also: $base/tv/live.html  ·  $base/tv/index.html?audit=1  ·  $base/pocb/" -ForegroundColor DarkGray
     Write-Host ""
 
     # ---- 3. Matching APK ---------------------------------------------------
@@ -117,7 +120,7 @@ try {
             New-Item -ItemType Directory -Path $out -Force | Out-Null
             gh run download $runId -n pocb-apk -D $out | Out-Null
 
-            $apk = Join-Path $out "pocb-playback-test.apk"
+            $apk = Join-Path $out "appletune-tv.apk"
             Move-Item (Join-Path $out "app-debug.apk") $apk -Force
             Write-Host "  APK: $apk" -ForegroundColor Green
         } finally {

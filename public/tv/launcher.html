@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppleTune TV — Test Launcher</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+<style>
+  /*
+    A menu, not a product screen. It exists because one APK can carry one
+    package name, so a single install has to reach every test target rather
+    than making anyone uninstall and reinstall between them.
+  */
+  .launcher {
+    position: absolute;
+    inset: var(--safe-y) var(--safe-x);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-4);
+  }
+  .launcher__items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 72rem;
+  }
+  .launcher__item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+  }
+  .launcher__name {
+    font-size: var(--fs-title);
+    font-weight: var(--fw-semibold);
+    color: var(--text-primary);
+    flex: 0 0 22rem;
+  }
+  .launcher__what {
+    font-size: var(--fs-body);
+    color: var(--text-secondary);
+  }
+  .launcher__note {
+    margin-top: var(--space-4);
+    font-size: var(--fs-body);
+    color: var(--text-tertiary);
+  }
+  .launcher__env {
+    font-family: var(--font-num);
+    font-size: var(--fs-caption);
+    color: var(--text-tertiary);
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <section class="screen" data-screen="launcher" data-active="true">
+    <div class="launcher">
+      <div class="pair__eyebrow">AppleTune TV — test launcher</div>
+      <h1 class="pair__headline">What do you want to run?</h1>
+
+      <div class="launcher__items" data-focus-group="launcher">
+        <div class="launcher__item focusable" data-size="sm" data-focusable
+             data-href="live.html">
+          <span class="launcher__name">Live app</span>
+          <span class="launcher__what">Your real music, real playback. Pairs with your phone.</span>
+        </div>
+
+        <div class="launcher__item focusable" data-size="sm" data-focusable
+             data-href="index.html?audit=1">
+          <span class="launcher__name">G4 audit</span>
+          <span class="launcher__what">Automated D-pad checks. Runs itself and prints a verdict.</span>
+        </div>
+
+        <div class="launcher__item focusable" data-size="sm" data-focusable
+             data-href="index.html">
+          <span class="launcher__name">Prototype</span>
+          <span class="launcher__what">Demo data, no sign-in. For the manual remote checklist.</span>
+        </div>
+
+        <div class="launcher__item focusable" data-size="sm" data-focusable
+             data-href="../pocb/">
+          <span class="launcher__name">POC-B playback test</span>
+          <span class="launcher__what">The gate G1 harness, if you want to re-run it.</span>
+        </div>
+      </div>
+
+      <p class="launcher__note">
+        Use the D-pad and press OK. BACK returns here from anywhere.
+      </p>
+      <p class="launcher__env" id="env"></p>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { init, focus } from "./scripts/spatial-nav.js";
+
+/* Report the environment up front — the WebView version is a real variable
+   across TV devices and belongs in any result we record. */
+document.getElementById("env").textContent = navigator.userAgent;
+
+document.addEventListener("spatialfocus", (event) => {
+  for (const stale of document.querySelectorAll('[data-focused="true"]')) {
+    stale.removeAttribute("data-focused");
+  }
+  if (event.detail.element) event.detail.element.setAttribute("data-focused", "true");
+});
+
+document.addEventListener("spatialselect", (event) => {
+  const href = event.detail.element?.dataset.href;
+  if (href) location.href = href;
+});
+
+init(document.getElementById("app"));
+const first = document.querySelector("[data-focusable]");
+if (first) focus(first);
+</script>
+</body>
+</html>
