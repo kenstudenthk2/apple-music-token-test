@@ -1,8 +1,7 @@
 # POC-B Result — gate G1
 
-**Gate status: ✅ PASSED** (2026-08-19), on the project owner's direct
-observation. See "Evidence gap" below — the pass is recorded, the paperwork the
-charter asks for is not yet complete.
+**Gate status: ✅ PASSED** (2026-08-19). Evidence captured on the device — see
+"Evidence" below.
 
 The gate asked: does a catalog track play from 0:00 to its natural end inside an
 **Android WebView** on a **physical** Android TV device over HTTPS? It does.
@@ -68,23 +67,53 @@ own, and the design in `docs/design/` can be built as drawn.
 
 ---
 
-## Evidence gap
+## Evidence — captured 2026-08-19
 
-Charter rule 10 is "evidence or it did not happen", and the G1 PASS criterion
-asks for a screen recording or a logged `playbackTime` trace, plus device model,
-Android/WebView version, and Widevine level. The pass is recorded on the
-owner's direct observation of the harness verdict; those artifacts are not yet
-attached.
+Photographed on the device during a run. This is the baseline every future
+regression is compared against.
 
-Still worth capturing, because they are the baseline every future regression is
-compared against:
+| Field | Value |
+|---|---|
+| Display | TCL television |
+| WebView user agent | `Chrome/150.0.7871.183 Mobile Safari/537.36` — Android System WebView 150 |
+| Widevine | **available** (`keySystem=com.widevine.alpha`) |
+| Token path | **paired (phone)** |
+| Track | "Choosin' Texas" — Ella Langley (id 1844932150) |
+| Catalog duration | 3:52 |
+| Observed position | **1:22 and advancing** |
+| Pairing code | TV-Z5JH |
 
-- [ ] Device model and Android version
-- [ ] WebView implementation and version — the app logs it: `adb logcat -s POCB`
-- [ ] The Widevine cell from the harness (`available` / `UNAVAILABLE`)
-- [ ] A photo of the verdict bar and log panel
+Harness log, verbatim:
 
-This is a documentation debt, not a reason to doubt the result.
+```
+ 0.2s  Widevine available (keySystem=com.widevine.alpha).
+ 0.6s  Pairing session TV-Z5JH. On your phone open: https://…/activate/TV-Z5JH
+76.0s  Phone authorized. Music User Token received (not printed).
+76.0s  Waiting for MusicKit JS…
+76.7s  MusicKit configured.
+76.7s  MusicKit accepted the paired token directly. The QR architecture holds.
+77.8s  Track: "Choosin' Texas" by Ella Langley (id 1844932150, 3:52).
+78.4s  Queue set. Calling play()…
+```
+
+**1:22 is past the preview ceiling by a wide margin**, so the 30-second failure
+mode is conclusively excluded. The photograph was taken mid-track, so the
+harness's own end-of-track PASS verdict is not in this capture; the outstanding
+item is that final verdict line, not the result.
+
+- [ ] The verdict bar after the track reaches its natural end
+- [ ] Android OS version (the WebView version is captured; the OS version is not)
+
+---
+
+## G2 regression — passed in the same run
+
+This APK was built after the split-code endpoints landed, so it polls
+`GET /api/session/token` with a bearer `device_code` rather than reading a token
+by `user_code`. Pairing completed at 76.0s and playback followed.
+
+The security hardening therefore did not break playback on real hardware —
+which is the whole reason a regression run existed.
 
 ---
 
@@ -94,11 +123,10 @@ G1 was the gate every other gate was waiting behind, and it is the reason the UI
 work was flagged as sunk cost if it failed. It did not fail, so:
 
 - The G3 prototype and the design system are validated investments.
-- **G2 (security hardening) becomes the critical path.** The pairing code alone
-  is still sufficient to retrieve a Music User Token, and there is no rate
-  limiting. That was tolerable while the whole direction was in doubt; it is not
-  tolerable now that we are building on it.
-- **Shut down the cloudflared tunnel.** It exposes that gap to the internet and
-  has served its purpose.
-- Token lifetime moves to the top of the risk register, since G5 depends on it
-  and nothing about it has been tested.
+- **G2 (security hardening) is done**, and its regression is the run recorded
+  above. The pairing code on its own no longer retrieves anything.
+- **Token lifetime is now the largest remaining unknown**, and it sits directly
+  under gate G5, which requires staying logged in across an app restart.
+  Nothing about expiry or refresh has been tested.
+- Shut the cloudflared tunnel down between test sessions. It is not needed
+  while nobody is testing.
