@@ -1,0 +1,421 @@
+/* ==========================================================================
+   AppleTune TV — Design Tokens
+   Target: Android TV / Google TV, D-pad only, 10-foot UI.
+   Canvas: 1920x1080 reference. Scales to 1280x720 and 3840x2160.
+
+   PERFORMANCE CONTRACT (read before writing any component CSS):
+   TV SoCs (Amlogic S905, MT9602, older Bravia chipsets) have weak GPUs and
+   no fast path for repaint-heavy properties. Therefore:
+     ANIMATE ONLY  ->  transform, opacity
+     NEVER ANIMATE ->  width, height, top, left, right, bottom, margin,
+                       padding, box-shadow, filter, border-width,
+                       background-color, border-radius
+   Shadows/elevation must be pre-rendered on stacked pseudo-elements and
+   cross-faded via `opacity`. Focus growth is `transform: scale()`, never a
+   size change. Keep animated layers under ~6 per screen and declare
+   `will-change: transform` on the focusable element only while a row is
+   actually moving (remove it afterwards; permanent will-change exhausts
+   TV VRAM).
+   ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   1. ROOT SCALING
+   The entire UI is expressed in rem. 1rem = 16px at 1920px wide, and the
+   root font-size is a pure function of viewport width, so every dimension
+   in the system scales proportionally with the panel:
+       1280x720   -> 1rem = 10.667px  (0.667x)
+       1920x1080  -> 1rem = 16px      (1.000x)
+       3840x2160  -> 1rem = 32px      (2.000x)
+   Using vw (not vh) as the driver keeps layout identical on any 16:9 panel
+   and degrades gracefully on the rare 16:10 / 21:9 TV: content gets shorter,
+   never wider than the safe area.
+   Clamped so a phantom 640px-wide webview or an 8K panel stays legible.
+   -------------------------------------------------------------------------- */
+html {
+  font-size: clamp(8px, 0.8333333vw, 40px); /* 16 / 1920 = 0.8333333vw */
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+:root {
+
+  /* ------------------------------------------------------------------------
+     2. OVERSCAN SAFE AREA
+     Consumer TVs still crop 3-5% of the signal. A 5% inset on all sides is
+     the Android TV / Google TV published guidance and the worst case we
+     design for. Expressed in vw/vh so the inset stays a true 5% at every
+     resolution:
+       1080p -> 96px left/right,  54px top/bottom
+       720p  -> 64px left/right,  36px top/bottom
+       4K    -> 192px left/right, 108px top/bottom
+     NOTHING functional or readable may sit outside this box. Backgrounds,
+     art bleed and row "peek" may.
+     ------------------------------------------------------------------------ */
+  --safe-x: 5vw;
+  --safe-y: 5vh;
+  --safe-width: 90vw;   /* 1728px @1080p — the usable content width */
+  --safe-height: 90vh;  /*  972px @1080p */
+
+
+  /* ------------------------------------------------------------------------
+     3. SURFACE RAMP (dark-first)
+     A TV is the brightest object in a dark living room. Peak-white flooding
+     is physically uncomfortable and drives OLED auto-brightness limiting, so
+     the base is a near-black with a slight blue-violet cast, not pure #000.
+
+     Why NOT #000000:
+       - On OLED, pure-black pixels switch fully off; an element lifting off a
+         fully-off field reads as a hard cut with no perceived depth, and
+         near-black gradients band badly against it.
+       - On edge-lit LCD, #000 exposes backlight bleed and local-dimming
+         halos around focused elements as grey clouds.
+       - #0B0B10 sits at ~4% luminance: still cinema-dark, but leaves headroom
+         for four distinguishable elevation levels above it.
+     The slight blue cast (+5 on the B channel) counteracts the warm gamma
+     most TVs ship in "Standard" picture mode.
+     ------------------------------------------------------------------------ */
+  --surface-0: #0B0B10;  /* app background / behind everything */
+  --surface-1: #14141B;  /* shelves, page sections, nav bar */
+  --surface-2: #1E1E27;  /* cards, tiles, list rows (unfocused) */
+  --surface-3: #2A2A35;  /* raised: now-playing bar, menus */
+  --surface-4: #363644;  /* highest: dialogs, focused card plate */
+  --surface-scrim: rgba(11, 11, 16, 0.72);        /* over art, for text */
+  --surface-scrim-strong: rgba(11, 11, 16, 0.92); /* modal backdrop */
+  --surface-hairline: rgba(255, 255, 255, 0.08);  /* 1px separators */
+
+
+  /* ------------------------------------------------------------------------
+     4. TEXT RAMP
+     All ratios measured against --surface-0 (#0B0B10) and verified to still
+     pass on --surface-2 (#1E1E27), the worst realistic background.
+       primary   #F5F6F8  -> 18.1:1 on surface-0, 14.0:1 on surface-2
+       secondary #B4B8C2  ->  9.6:1 on surface-0,  7.4:1 on surface-2
+       tertiary  #8B909C  ->  5.5:1 on surface-0,  4.3:1 on surface-2
+       disabled  #5A5F6B  ->  2.6:1 — deliberately sub-AA; disabled items
+                              never carry unique information and are also
+                              marked aria-disabled.
+     Text primary is NOT #FFFFFF: pure white on near-black at 3 m causes
+     visible halation/bloom on LCD. 96% white keeps edges crisp.
+     ------------------------------------------------------------------------ */
+  --text-primary: #F5F6F8;
+  --text-secondary: #B4B8C2;
+  --text-tertiary: #8B909C;
+  --text-disabled: #5A5F6B;
+  --text-on-accent: #FFFFFF;   /* 4.6:1 on --accent-600 — AA for large text */
+  --text-inverse: #0B0B10;     /* for use on light / vibrant fills */
+
+
+  /* ------------------------------------------------------------------------
+     5. ACCENT + SEMANTIC
+     Brand accent is Apple-Music magenta-red. accent-500 is the FILL colour
+     (4.9:1 on surface-0 — passes AA for large text and the 3:1 non-text UI
+     component threshold). accent-300 is the TEXT-safe tint (7.1:1) and must
+     be used whenever the accent carries body-size text.
+     ------------------------------------------------------------------------ */
+  --accent-300: #FF8496;  /* accent text on dark, 7.1:1 */
+  --accent-400: #FF5C72;
+  --accent-500: #FA2D48;  /* primary fill: play button, active tab, progress */
+  --accent-600: #D91B36;  /* pressed / active fill */
+  --accent-tint-12: rgba(250, 45, 72, 0.12); /* selected-row wash */
+
+  --success: #3ED07A;  /* 9.4:1 */
+  --warning: #FFC24B;  /* 11.6:1 */
+  --danger:  #FF6B5E;  /* 6.0:1 — error body text is readable */
+
+
+  /* ------------------------------------------------------------------------
+     6. ALBUM-ART ADAPTIVE ACCENT
+     JS extracts the dominant/vibrant colour from the current artwork and
+     overwrites --art-accent on :root (or on a scoped Now-Playing container).
+     The fallback equals the brand accent, so the UI is fully correct before
+     any extraction runs and stays correct if extraction fails or the art is
+     greyscale.
+
+     RULES FOR THE EXTRACTOR:
+       - Clamp the result to L* 45-75 and C >= 0.08 in OKLCH before writing,
+         so a muddy or near-white cover cannot produce an invisible accent.
+       - If the clamped colour still lands under 3:1 against --surface-0,
+         discard it and keep the fallback.
+       - Write ONLY --art-accent (the -soft / -glow / -bloom tokens derive
+         from it). NEVER overwrite --accent-500 or --focus-ring: the focus
+         affordance and brand controls must stay stable across every screen
+         and every album.
+       - Cross-fade a track change over --dur-slow rather than swapping
+         instantly. Do it by fading two static full-bleed layers with
+         `opacity`; do not transition background-color on a large element.
+     ------------------------------------------------------------------------ */
+  --art-accent: var(--accent-500);
+  --art-accent-soft: color-mix(in oklab, var(--art-accent) 22%, transparent);
+  --art-glow: color-mix(in oklab, var(--art-accent) 46%, transparent);
+  --art-bloom: radial-gradient(
+      120% 90% at 50% 0%,
+      color-mix(in oklab, var(--art-accent) 26%, transparent) 0%,
+      transparent 62%);
+
+
+  /* ------------------------------------------------------------------------
+     7. FOCUS
+     The single most important visual in the product. A neutral white ring
+     (21:1 against every surface, and independent of --art-accent so it can
+     never be washed out by a red or pink album cover), plus a coloured glow
+     that inherits the artwork accent for warmth, plus scale.
+     ------------------------------------------------------------------------ */
+  --focus-ring: #FFFFFF;
+  --focus-ring-width: 0.25rem;    /* 4px @1080p */
+  --focus-ring-offset: 0.25rem;   /* 4px gap between element and ring */
+  --focus-ring-inner: rgba(11, 11, 16, 0.9); /* dark liner beneath the white
+                                    ring so it survives on light artwork */
+  --focus-scale: 1.08;            /* tiles and cards */
+  --focus-scale-sm: 1.12;         /* small controls: transport, nav, chips */
+  --focus-scale-lg: 1.02;         /* elements wider than ~60% of the screen
+                                     (now-playing bar, full-width list rows):
+                                     a large element scaled 8% moves its far
+                                     edge by ~70px, which reads as a layout
+                                     jump rather than as focus */
+  --focus-glow: 0 0 2rem 0.5rem var(--art-glow); /* static, cross-faded */
+
+
+  /* ------------------------------------------------------------------------
+     8. TYPE SCALE
+     Sized for a 3 m viewing distance. The governing rule is angular size:
+     24px on a 55" 1080p panel at 3 m subtends roughly the same visual angle
+     as 9px on a laptop at 60 cm — that is the FLOOR, not the comfort point.
+     Body is therefore 24px minimum and 28px preferred for anything a user
+     reads rather than scans. Caption (20px) is reserved for non-essential,
+     duplicated metadata and must never carry unique information.
+     px values are at 1080p; rem values scale automatically.
+     Line-heights are tight at display sizes (long lines are rare on TV) and
+     generous at body sizes (legibility at distance). Letter-spacing is
+     slightly negative on large type to counter apparent looseness.
+     ------------------------------------------------------------------------ */
+  --font-sans: "Inter", "Roboto", "Noto Sans", system-ui, sans-serif;
+  --font-num:  "Inter", "Roboto Mono", ui-monospace, monospace; /* timecodes;
+                pair with font-variant-numeric: tabular-nums so 0:59 -> 1:00
+                does not shift layout during playback */
+
+  --fs-display:   4rem;     /* 64px — Now Playing track title, QR headline */
+  --fs-title-lg:  2.75rem;  /* 44px — screen titles ("Your Library") */
+  --fs-title:     2.25rem;  /* 36px — shelf headings, dialog titles */
+  --fs-title-sm:  2rem;     /* 32px — nav items, focused card title */
+  --fs-body-lg:   1.75rem;  /* 28px — preferred body, card primary label */
+  --fs-body:      1.5rem;   /* 24px — MINIMUM body, secondary labels */
+  --fs-caption:   1.25rem;  /* 20px — non-essential metadata only */
+
+  --lh-tight: 1.1;   /* display / titles */
+  --lh-snug:  1.25;  /* card labels, nav */
+  --lh-body:  1.45;  /* paragraphs, help text, error bodies */
+
+  --ls-display: -0.02em;
+  --ls-title:   -0.01em;
+  --ls-body:     0em;
+  --ls-caps:     0.08em;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+
+  /* ------------------------------------------------------------------------
+     9. SPACING — 8px base grid at 1080p
+     TV layouts need much larger gaps than desktop: a focused tile grows by
+     8% and must not visually collide with its neighbours, and the eye needs
+     clear channels to track D-pad movement across a room.
+     Minimum gap between two focusable siblings: --space-4 (32px), which
+     exceeds the 11.5px-per-side growth of a focused 288px tile.
+     ------------------------------------------------------------------------ */
+  --space-0: 0;
+  --space-1: 0.5rem;   /*   8px */
+  --space-2: 1rem;     /*  16px */
+  --space-3: 1.5rem;   /*  24px */
+  --space-4: 2rem;     /*  32px — default gap between focusable siblings */
+  --space-5: 3rem;     /*  48px — gap between shelves */
+  --space-6: 4rem;     /*  64px */
+  --space-7: 6rem;     /*  96px */
+  --space-8: 8rem;     /* 128px */
+
+
+  /* ------------------------------------------------------------------------
+     10. RADII
+     Larger than desktop equivalents: at 3 m a 4px radius reads as a square
+     corner, and low-end TV browsers antialias small radii poorly.
+     ------------------------------------------------------------------------ */
+  --radius-sm:   0.5rem;   /*  8px — chips, badges, progress bar */
+  --radius-md:   0.75rem;  /* 12px — album art, tiles */
+  --radius-lg:   1rem;     /* 16px — panels, now-playing bar */
+  --radius-xl:   1.5rem;   /* 24px — modals, QR card */
+  --radius-pill: 999rem;   /* transport buttons, tab pills */
+
+
+  /* ------------------------------------------------------------------------
+     11. ELEVATION (static only — never transitioned)
+     Apply as a STATIC box-shadow on a pseudo-element layer and cross-fade
+     two such layers with opacity when elevation changes.
+     Shadows are deep and soft: on a near-black ground a tight shadow is
+     invisible, so separation comes from spread plus a subtle top rim-light.
+     ------------------------------------------------------------------------ */
+  --elev-0: none;
+  --elev-1: 0 0.125rem 0.5rem  rgba(0, 0, 0, 0.50);
+  --elev-2: 0 0.5rem   1.5rem  rgba(0, 0, 0, 0.60);
+  --elev-3: 0 1rem     2.5rem  rgba(0, 0, 0, 0.70);
+  --elev-4: 0 1.5rem   4rem    rgba(0, 0, 0, 0.80);
+  --rim-light: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.10);
+
+
+  /* ------------------------------------------------------------------------
+     12. MOTION
+     Focus movement must feel instant but never jumpy. 200ms is the sweet
+     spot for press-to-settle; below ~140ms the scale change reads as a
+     flicker on a 60Hz panel with 2-3 frames of TV processing lag, above
+     ~320ms it feels laggy when the user holds the key to scroll a long row.
+     Easing is ease-OUT only: fast departure, soft arrival, NO overshoot.
+     Bouncy / spring curves are banned — they make a held D-pad repeat look
+     like the UI is wobbling, and they double the animated frame count.
+     ------------------------------------------------------------------------ */
+  --dur-instant: 90ms;   /* OK-press dip */
+  --dur-fast:    150ms;  /* small controls, opacity cross-fades */
+  --dur-focus:   200ms;  /* THE focus transition */
+  --dur-normal:  260ms;  /* row scroll / carousel translate */
+  --dur-slow:    400ms;  /* screen transitions, art-accent wash */
+  --dur-ambient: 900ms;  /* background bloom, skeleton shimmer cycle */
+
+  --ease-out:      cubic-bezier(0.20, 0.00, 0.00, 1.00); /* default */
+  --ease-out-soft: cubic-bezier(0.16, 0.00, 0.20, 1.00);
+  --ease-in-out:   cubic-bezier(0.45, 0.00, 0.20, 1.00); /* row translate */
+  --ease-linear:   linear;                               /* progress, shimmer */
+
+
+  /* ------------------------------------------------------------------------
+     13. COMPONENT DIMENSIONS (1080p reference)
+     Single source of truth so shelves, focus math and skeletons agree.
+     ------------------------------------------------------------------------ */
+  --tile-size:       18rem;   /* 288px square album/playlist art */
+  --tile-wide-w:     32rem;   /* 512px 16:9 hero/video tile */
+  --tile-wide-h:     18rem;   /* 288px */
+  --tile-gap:        var(--space-4);  /* 32px */
+  --tile-label-block: 4.5rem; /* 72px: 28px title + 4px + 24px subtitle */
+  --shelf-header-h:  3.5rem;  /* 56px */
+  --shelf-gap:       var(--space-5);  /* 48px between shelves */
+  --nav-height:      6rem;    /* 96px top nav */
+  --nowplaying-h:    8rem;    /* 128px persistent now-playing bar */
+  --control-size:    5.5rem;  /* 88px transport button */
+  --control-size-lg: 7rem;    /* 112px primary play/pause */
+  --list-row-h:      6rem;    /* 96px library/search list row */
+  --qr-module:       25rem;   /* 400px QR bitmap */
+  --qr-quiet:        var(--space-4); /* 32px quiet zone around the QR */
+
+  --z-content: 0;
+  --z-shelf-header: 10;
+  --z-nav: 100;
+  --z-nowplaying: 200;
+  --z-modal: 300;
+  --z-focus-glow: 5; /* within a tile's own stacking context */
+}
+
+
+/* --------------------------------------------------------------------------
+   14. BASE
+   Focus is app-managed: exactly one element carries [data-focused="true"] at
+   any moment. The browser's own :focus-visible outline is suppressed — it is
+   far too subtle for a 10-foot UI — and re-expressed by the design system.
+   -------------------------------------------------------------------------- */
+body {
+  margin: 0;
+  background-color: var(--surface-0);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body);
+  overflow: hidden;   /* the document itself never scrolls on TV */
+  cursor: none;       /* no pointer exists on a D-pad device */
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.safe-area {
+  position: absolute;
+  inset: var(--safe-y) var(--safe-x);
+  width: var(--safe-width);
+  height: var(--safe-height);
+}
+
+:focus,
+:focus-visible { outline: none; }
+
+
+/* --------------------------------------------------------------------------
+   15. THE FOCUS PRIMITIVE
+   Apply .focusable to any D-pad target; the spatial-navigation layer toggles
+   [data-focused="true"]. Only transform and opacity change. The ring and glow
+   live on ::after as a pre-rendered box-shadow faded in via opacity, so no
+   shadow is ever interpolated.
+   -------------------------------------------------------------------------- */
+.focusable {
+  position: relative;
+  transform: scale(1);
+  transform-origin: center center;
+  transition: transform var(--dur-focus) var(--ease-out);
+}
+
+.focusable::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--focus-ring-offset) * -1);
+  border-radius: inherit;
+  border: var(--focus-ring-width) solid var(--focus-ring);
+  box-shadow: var(--focus-glow), 0 0 0 0.0625rem var(--focus-ring-inner);
+  opacity: 0;
+  pointer-events: none;
+  z-index: var(--z-focus-glow);
+  transition: opacity var(--dur-focus) var(--ease-out);
+}
+
+.focusable[data-focused="true"] {
+  transform: scale(var(--focus-scale));
+  z-index: 1; /* a focused element always paints above its siblings */
+}
+.focusable[data-focused="true"]::after { opacity: 1; }
+
+.focusable[data-size="sm"][data-focused="true"] {
+  transform: scale(var(--focus-scale-sm));
+}
+
+.focusable[data-size="lg"][data-focused="true"] {
+  transform: scale(var(--focus-scale-lg));
+}
+
+/* OK-press feedback: a quick dip, still transform-only. */
+.focusable[data-pressed="true"] {
+  transform: scale(calc(var(--focus-scale) * 0.96));
+  transition-duration: var(--dur-instant);
+}
+
+.focusable[data-disabled="true"] {
+  opacity: 0.4;
+  color: var(--text-disabled);
+}
+
+
+/* --------------------------------------------------------------------------
+   16. REDUCED MOTION
+   Android TV exposes "Remove animations" through prefers-reduced-motion.
+   We keep the focus RING and the scale STEP — they are the affordance — but
+   remove the interpolation, so the change becomes instantaneous. Ambient
+   motion (bloom, shimmer, art-accent wash, marquee) is disabled entirely,
+   and the scale step is reduced because an instant 8% jump is more startling
+   than an animated one.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  :root {
+    --focus-scale: 1.04;
+    --focus-scale-sm: 1.06;
+  }
+}

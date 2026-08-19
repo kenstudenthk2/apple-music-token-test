@@ -5,3 +5,4 @@ secure/*
 !secure/README.md
 .DS_Store
 apple-music-token-test.zip
+dist/

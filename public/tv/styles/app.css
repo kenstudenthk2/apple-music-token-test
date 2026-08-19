@@ -1,0 +1,821 @@
+/* ==========================================================================
+   AppleTune TV — Screen & component layout
+   Consumes tokens.css. Loaded after it, never before.
+
+   Obeys the performance contract declared at the top of tokens.css:
+   only transform and opacity are ever animated.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   SCREEN STACK
+   All screens are mounted at once and cross-faded. Mounting and unmounting DOM
+   on a TV SoC costs more than keeping five hidden layers alive, and it lets
+   focus memory survive a screen change without re-querying the DOM.
+   -------------------------------------------------------------------------- */
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(1.015);
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-normal) var(--ease-out),
+    transform var(--dur-normal) var(--ease-out);
+}
+
+.screen[data-active="true"] {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.screen__body {
+  position: absolute;
+  inset: var(--safe-y) var(--safe-x);
+}
+
+
+/* --------------------------------------------------------------------------
+   TOP NAV
+   Five destinations, always visible, never scrolls. The active destination is
+   marked independently of focus: the user must be able to see where they ARE
+   while the focus ring is somewhere else entirely.
+   -------------------------------------------------------------------------- */
+.nav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--nav-height);
+  z-index: var(--z-nav);
+}
+
+/* Full-bleed opaque backing. Shelves slide UNDER the nav, and without this the
+   previous row's labels stay visible behind it. Bleeds past the safe area on
+   both sides and upward, because the rows bleed too. */
+.nav::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--safe-x) * -1);
+  right: calc(var(--safe-x) * -1);
+  top: calc(var(--safe-y) * -1);
+  bottom: 0;
+  background: var(--surface-0);
+  z-index: -1;
+}
+
+.nav__brand {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-title);
+  margin-right: var(--space-5);
+  color: var(--text-primary);
+}
+
+.nav__item {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-title-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  background: transparent;
+  white-space: nowrap;
+}
+
+/* Current destination — a filled pill, readable with no focus ring present. */
+.nav__item[data-current="true"] {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.nav__spacer { flex: 1; }
+
+.nav__meta {
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* --------------------------------------------------------------------------
+   SHELVES
+   A vertical stack of horizontal rows. The rows translate; they never scroll
+   with scrollLeft, because a transform is composited and scrollLeft is not.
+   -------------------------------------------------------------------------- */
+/* Bleeds past the safe area on BOTH sides. The left bleed is not decoration:
+   a focused tile grows by 8%, and the leftmost tile in a row would be sliced
+   off by the clip edge without it. The right bleed lets the next card peek. */
+.shelves {
+  position: absolute;
+  top: var(--nav-height);
+  left: calc(var(--safe-x) * -1);
+  right: calc(var(--safe-x) * -1);
+  /* Reserve the persistent now-playing bar's height so a shelf is never hidden
+     underneath it. The bar is always present once something has played. */
+  bottom: var(--nowplaying-h);
+  overflow: hidden;
+}
+
+/* The whole stack slides vertically so the active row sits near the top. */
+.shelves__track {
+  display: flex;
+  flex-direction: column;
+  gap: var(--shelf-gap);
+  /* Puts content back inside the safe area, and leaves headroom above the
+     first row for the focus scale. */
+  padding: var(--space-3) var(--safe-x) 0;
+  transition: transform var(--dur-normal) var(--ease-out);
+  will-change: transform;
+}
+
+.shelf__header {
+  height: var(--shelf-header-h);
+  display: flex;
+  align-items: center;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-title);
+  color: var(--text-primary);
+}
+
+/* Deliberately NOT clipped. A focused tile grows vertically too, and clipping
+   here would slice the label off. The outer .shelves box does all the clipping. */
+.shelf__viewport { overflow: visible; }
+
+.shelf__row {
+  display: flex;
+  gap: var(--tile-gap);
+  transition: transform var(--dur-normal) var(--ease-out);
+  will-change: transform;
+}
+
+
+/* --------------------------------------------------------------------------
+   TILE
+   Square album art with the label BELOW the art, never on top of it: text over
+   arbitrary artwork cannot be guaranteed to meet contrast, and Apple's own
+   guidelines discourage overlaying artwork.
+   -------------------------------------------------------------------------- */
+.tile {
+  flex: 0 0 auto;
+  width: var(--tile-size);
+  border-radius: var(--radius-md);
+}
+
+.tile__art {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-2);
+  overflow: hidden;
+  position: relative;
+}
+
+/* A soft rim so dark artwork still separates from a dark background. */
+.tile__art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--rim-light);
+  pointer-events: none;
+}
+
+.tile__label {
+  height: var(--tile-label-block);
+  padding-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.25rem;
+  /* Dimmed until focused, so a wall of 24 tiles is not 24 shouting labels.
+     Opacity only — free on the compositor. */
+  opacity: 0.72;
+  transition: opacity var(--dur-focus) var(--ease-out);
+}
+
+.tile[data-focused="true"] .tile__label { opacity: 1; }
+
+.tile__title {
+  font-size: var(--fs-body-lg);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile__subtitle {
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* --------------------------------------------------------------------------
+   PAIRING / QR SCREEN
+   Two columns: instructions left, the code and QR right. The code is the
+   largest text in the entire app — it is read aloud across a room and typed
+   into a phone.
+   -------------------------------------------------------------------------- */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-8);
+  height: 100%;
+}
+
+.pair__eyebrow {
+  font-size: var(--fs-body-lg);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--art-accent);
+  margin-bottom: var(--space-3);
+}
+
+.pair__headline {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--space-4);
+}
+
+.pair__steps {
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pair__step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--fs-body-lg);
+  color: var(--text-secondary);
+}
+
+.pair__step-n {
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pair__url {
+  font-size: var(--fs-title-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+
+.pair__code {
+  font-family: var(--font-num);
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.12em;
+  color: var(--art-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.pair__panel {
+  background: var(--surface-1);
+  border-radius: var(--radius-xl);
+  padding: var(--qr-quiet);
+  box-shadow: var(--elev-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pair__qr {
+  width: var(--qr-module);
+  height: var(--qr-module);
+  border-radius: var(--radius-sm);
+  background: #FFFFFF; /* a QR must be true white to scan reliably */
+  display: grid;
+  padding: 1rem;
+}
+
+.pair__qr canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.pair__status {
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pair__status[data-state="ok"] { color: var(--success); }
+
+/* Waiting indicator. Opacity-only pulse; no layout, no colour interpolation. */
+.pair__dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  animation: pulse var(--dur-ambient) var(--ease-in-out) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+
+/* --------------------------------------------------------------------------
+   NOW PLAYING
+   The screen a viewer stares at longest. Layout: rotating disc left, metadata
+   right, ambient wash behind everything, transport across the bottom.
+   -------------------------------------------------------------------------- */
+.now {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Ambient wash derived from the artwork's dominant colour. Sits behind
+   everything, scaled up so its blurred edges never reach the safe area. */
+.now__bloom {
+  position: absolute;
+  inset: -20%;
+  background: var(--art-bloom);
+  opacity: 0;
+  transform: scale(1);
+  transition: opacity var(--dur-slow) var(--ease-out-soft);
+  will-change: transform, opacity;
+}
+
+.screen[data-active="true"] .now__bloom {
+  opacity: 1;
+  animation: drift 24s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes drift {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.12) translate3d(2%, -2%, 0); }
+}
+
+.now__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-scrim);
+}
+
+.now__body {
+  position: absolute;
+  inset: var(--safe-y) var(--safe-x);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 0 var(--space-7);
+  align-items: center;
+}
+
+/* --- The disc: artwork on a rotating vinyl --------------------------------
+   The record body rotates continuously while playing and the artwork label
+   rotates with it. Pure transform, one composited layer. Paused rather than
+   removed when playback pauses, so the disc stops where it was.             */
+/* 34rem is the design size at 16:9. The vh clamp keeps the disc inside the
+   safe area on the wider-than-16:9 panels that do exist (21:9, and the
+   letterboxed viewport a desktop review window produces). */
+.now__disc {
+  position: relative;
+  width: min(34rem, 52vh);
+  height: min(34rem, 52vh);
+  align-self: center;
+}
+
+.now__vinyl {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.035) 0,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    radial-gradient(circle at 30% 25%, #2A2A33 0%, #111116 60%, #08080C 100%);
+  box-shadow: var(--elev-4);
+  animation: spin 6s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+
+.now[data-playing="true"] .now__vinyl { animation-play-state: running; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* The artwork label, centred on the disc. */
+.now__label {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  box-shadow: var(--elev-2), var(--rim-light);
+  overflow: hidden;
+}
+
+/* Spindle hole. */
+.now__label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8%;
+  height: 8%;
+  margin: -4% 0 0 -4%;
+  border-radius: 50%;
+  background: var(--surface-0);
+}
+
+.now__meta {
+  align-self: center;
+  min-width: 0;
+}
+
+.now__eyebrow {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--art-accent);
+  margin-bottom: var(--space-2);
+}
+
+.now__title {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now__artist {
+  font-size: var(--fs-title);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-1);
+}
+
+.now__album {
+  font-size: var(--fs-body-lg);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* --- Transport ----------------------------------------------------------- */
+.now__transport {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+}
+
+.now__scrub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-num);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.now__bar {
+  position: relative;
+  flex: 1;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+/* scaleX, not width — width would relayout on every animation frame. */
+.now__fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--art-accent);
+  transition: transform var(--dur-fast) var(--ease-linear);
+}
+
+.now__buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.control {
+  width: var(--control-size);
+  height: var(--control-size);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-title-sm);
+  line-height: 1;
+}
+
+.control[data-primary="true"] {
+  width: var(--control-size-lg);
+  height: var(--control-size-lg);
+  background: var(--art-accent);
+  color: var(--text-on-accent);
+  font-size: var(--fs-title);
+}
+
+
+/* --------------------------------------------------------------------------
+   DETAIL — album / playlist track list
+   -------------------------------------------------------------------------- */
+.detail {
+  position: absolute;
+  top: var(--nav-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 26rem 1fr;
+  gap: var(--space-7);
+  overflow: hidden;
+}
+
+.detail__art {
+  width: 26rem;
+  height: 26rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-3), var(--rim-light);
+}
+
+.detail__title {
+  font-size: var(--fs-title-lg);
+  font-weight: var(--fw-bold);
+  margin: var(--space-4) 0 var(--space-1);
+}
+
+.detail__sub {
+  font-size: var(--fs-body-lg);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.list {
+  overflow: hidden;
+  position: relative;
+}
+
+.list__track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--list-row-h);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+/* A full-width row has nowhere to grow: scaling it pushes its own ends past the
+   clip edge and cuts off the track number and duration. Focus is expressed with
+   a fill plus a leading accent bar instead, and the scale is cancelled. */
+.list__track[data-focused="true"] {
+  transform: none;
+  background: var(--surface-2);
+}
+
+.list__track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--art-accent);
+  opacity: 0;
+  transition: opacity var(--dur-focus) var(--ease-out);
+}
+
+.list__track[data-focused="true"]::before { opacity: 1; }
+
+/* The ring sits flush instead of outside the row, so it is not clipped by the
+   list's own overflow at the left and right edges. */
+.list__track::after { inset: 0; }
+
+.list__n {
+  width: 3rem;
+  font-family: var(--font-num);
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.list__name {
+  flex: 1;
+  font-size: var(--fs-body-lg);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list__dur {
+  font-family: var(--font-num);
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Marks the track currently playing, independent of focus. */
+.list__track[data-current="true"] .list__name,
+.list__track[data-current="true"] .list__n { color: var(--art-accent); }
+
+
+/* --------------------------------------------------------------------------
+   SEARCH — on-screen grid keyboard
+   -------------------------------------------------------------------------- */
+.search {
+  position: absolute;
+  top: var(--nav-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-7);
+}
+
+.search__field {
+  min-width: 34rem;
+  height: 5rem;
+  padding: 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  font-size: var(--fs-title-sm);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+}
+
+.search__caret {
+  width: 0.125rem;
+  height: 2.25rem;
+  margin-left: 0.25rem;
+  background: var(--art-accent);
+  animation: pulse 1.1s steps(1) infinite;
+}
+
+.search__keys {
+  display: grid;
+  grid-template-columns: repeat(6, 5rem);
+  gap: var(--space-2);
+}
+
+.key {
+  height: 5rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--fs-title-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.key[data-wide="true"] {
+  grid-column: span 2;
+  font-size: var(--fs-body);
+}
+
+
+/* --------------------------------------------------------------------------
+   PERSISTENT NOW-PLAYING BAR
+   Present on every browse screen so "what is playing" is answerable without
+   navigating anywhere.
+   -------------------------------------------------------------------------- */
+.miniplayer {
+  position: absolute;
+  left: var(--safe-x);
+  right: var(--safe-x);
+  bottom: var(--safe-y);
+  height: var(--nowplaying-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-3);
+  z-index: var(--z-nowplaying);
+  opacity: 0;
+  transform: translate3d(0, 1rem, 0);
+  transition:
+    opacity var(--dur-normal) var(--ease-out),
+    transform var(--dur-normal) var(--ease-out);
+  pointer-events: none;
+}
+
+.miniplayer[data-visible="true"] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+}
+
+.miniplayer__art {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--rim-light);
+  flex: 0 0 auto;
+}
+
+.miniplayer__text { flex: 1; min-width: 0; }
+
+.miniplayer__title {
+  font-size: var(--fs-body-lg);
+  font-weight: var(--fw-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miniplayer__artist {
+  font-size: var(--fs-body);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miniplayer__hint {
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+
+/* --------------------------------------------------------------------------
+   HINT BAR — remote key legend
+   -------------------------------------------------------------------------- */
+.hints {
+  position: absolute;
+  left: var(--safe-x);
+  bottom: calc(var(--safe-y) / 2);
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
+}
+
+.hints kbd {
+  font-family: var(--font-sans);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.5rem;
+  margin-right: 0.375rem;
+  color: var(--text-secondary);
+}

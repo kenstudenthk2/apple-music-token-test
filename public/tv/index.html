@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppleTune TV — Prototype</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<!--
+  Every screen is present in the DOM at all times and cross-faded. See
+  public/tv/CLAUDE.md for the contracts this markup must honour:
+  every D-pad target carries BOTH class="focusable" and data-focusable.
+-->
+<div class="app" id="app">
+
+  <!-- ============================================================ SCREEN: PAIR -->
+  <section class="screen" data-screen="pair" data-active="true">
+    <div class="screen__body">
+      <div class="pair">
+        <div>
+          <div class="pair__eyebrow">Sign in with your phone</div>
+          <h1 class="pair__headline">Scan to connect<br>Apple&nbsp;Music</h1>
+          <ol class="pair__steps">
+            <li class="pair__step">
+              <span class="pair__step-n">1</span>
+              <span>Point your phone camera at the code.</span>
+            </li>
+            <li class="pair__step">
+              <span class="pair__step-n">2</span>
+              <span>Or open <span class="pair__url">appletune.tv/activate</span></span>
+            </li>
+            <li class="pair__step">
+              <span class="pair__step-n">3</span>
+              <span>Enter <span class="pair__code" id="pair-code">TV-8X29</span></span>
+            </li>
+          </ol>
+          <div class="pair__status" id="pair-status" data-state="waiting">
+            <span class="pair__dot"></span>
+            <span id="pair-status-text">Waiting for your phone…</span>
+          </div>
+        </div>
+
+        <div class="pair__panel">
+          <!-- Rendered client-side; see scripts/app.js. -->
+          <div class="pair__qr"><canvas id="pair-qr" width="33" height="33"></canvas></div>
+          <div class="pair__status">Expires in <span id="pair-expiry">9:58</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hints">
+      <span><kbd>OK</kbd>Simulate a successful scan</span>
+    </div>
+  </section>
+
+  <!-- ============================================================ SCREEN: HOME -->
+  <section class="screen" data-screen="home">
+    <div class="screen__body">
+      <nav class="nav" data-focus-group="nav">
+        <div class="nav__brand">AppleTune</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="home" data-current="true">Home</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="library">Library</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="search">Search</div>
+        <div class="nav__spacer"></div>
+        <div class="nav__meta" id="home-clock">Good evening</div>
+      </nav>
+
+      <div class="shelves">
+        <!-- Shelves are rendered from scripts/demo-data.js. -->
+        <div class="shelves__track" id="home-shelves"></div>
+      </div>
+    </div>
+
+    <div class="miniplayer" id="miniplayer">
+      <div class="miniplayer__art" id="mini-art"></div>
+      <div class="miniplayer__text">
+        <div class="miniplayer__title" id="mini-title">—</div>
+        <div class="miniplayer__artist" id="mini-artist">—</div>
+      </div>
+      <div class="miniplayer__hint">Press <kbd>▶</kbd> for Now Playing</div>
+    </div>
+  </section>
+
+  <!-- ========================================================= SCREEN: LIBRARY -->
+  <section class="screen" data-screen="library">
+    <div class="screen__body">
+      <nav class="nav" data-focus-group="nav-library">
+        <div class="nav__brand">AppleTune</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="home">Home</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="library" data-current="true">Library</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="search">Search</div>
+      </nav>
+
+      <div class="detail">
+        <div>
+          <div class="detail__art" id="library-art"></div>
+          <h2 class="detail__title" id="library-title">Your Playlists</h2>
+          <p class="detail__sub" id="library-sub">6 playlists</p>
+        </div>
+        <div class="list" data-focus-group="library-list" id="library-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== SCREEN: SEARCH -->
+  <section class="screen" data-screen="search">
+    <div class="screen__body">
+      <nav class="nav" data-focus-group="nav-search">
+        <div class="nav__brand">AppleTune</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="home">Home</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="library">Library</div>
+        <div class="nav__item focusable" data-size="sm" data-focusable
+             data-action="go" data-target="search" data-current="true">Search</div>
+      </nav>
+
+      <div class="search">
+        <div>
+          <div class="search__field">
+            <span id="search-query"></span><span class="search__caret"></span>
+          </div>
+          <!-- Grid keyboard. Populated by scripts/app.js so the key map lives
+               in one place rather than being duplicated in markup. -->
+          <div class="search__keys" data-focus-group="keyboard" id="search-keys"></div>
+        </div>
+        <div class="list" data-focus-group="search-results" id="search-results"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== SCREEN: NOW PLAYING -->
+  <section class="screen" data-screen="now">
+    <div class="now" id="now" data-playing="true">
+      <div class="now__bloom"></div>
+      <div class="now__scrim"></div>
+
+      <div class="now__body">
+        <div class="now__disc">
+          <div class="now__vinyl"></div>
+          <div class="now__label" id="now-art"></div>
+        </div>
+
+        <div class="now__meta">
+          <div class="now__eyebrow" id="now-source">Playing from Recently Played</div>
+          <h1 class="now__title" id="now-title">—</h1>
+          <p class="now__artist" id="now-artist">—</p>
+          <p class="now__album" id="now-album">—</p>
+        </div>
+
+        <div class="now__transport">
+          <div class="now__scrub">
+            <span id="now-elapsed">0:00</span>
+            <span class="now__bar"><span class="now__fill" id="now-fill"></span></span>
+            <span id="now-total">0:00</span>
+          </div>
+          <div class="now__buttons" data-focus-group="transport">
+            <div class="control focusable" data-size="sm" data-focusable
+                 data-action="prev" aria-label="Previous track">⏮</div>
+            <div class="control focusable" data-size="sm" data-focusable
+                 data-action="playpause" data-primary="true"
+                 id="now-playpause" aria-label="Pause">⏸</div>
+            <div class="control focusable" data-size="sm" data-focusable
+                 data-action="next" aria-label="Next track">⏭</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hints">
+      <span><kbd>BACK</kbd>Return to Home</span>
+      <span><kbd>◀ ▶</kbd>Previous / Next</span>
+      <span><kbd>OK</kbd>Play / Pause</span>
+    </div>
+  </section>
+
+</div>
+
+<script type="module" src="scripts/app.js"></script>
+</body>
+</html>
