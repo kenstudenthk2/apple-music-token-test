@@ -82,6 +82,7 @@ Every gate has a PASS criterion that a person or script can check mechanically. 
   - Requires user gesture that a D-pad remote cannot produce.
 - **Deliverable**: `docs/POCB_RESULT.md` with device model, Android/WebView version, Widevine security level (L1/L3), the exact WebView settings required, and the recording/trace.
 - **If FAIL**: STOP. Escalate to the human user with the failure mode and the two fallback options (native ExoPlayer + Widevine, or Radon-Tunes-style approach) — do NOT pick a fallback unilaterally.
+- **Status**: 🟡 **NOT PASSED.** A desktop-Chrome pre-stage passed on 2026-08-19 — full track, no preview — and, more importantly, MusicKit accepted the **phone-paired** Music User Token directly (`TOKEN PATH: paired (phone)`), with no on-device `authorize()`. That retires the project's founding uncertainty: the Music User Token is **not** device-bound, so the QR device-login architecture stands. The gate itself remains open because a desktop browser cannot pass it — the WebView test on physical TV hardware has not been run. See `docs/POCB_RESULT.md`.
 
 ### G2 — Security Hardening (Parallel OK with G1)
 - **PASS**, all four verified by an automated test in `pairing-server.test.js`:
