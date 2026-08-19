@@ -53,15 +53,36 @@ jobs:
       - name: Confirm the URL was compiled in
         working-directory: android
         run: |
+          set -u
           APK=app/build/outputs/apk/debug/app-debug.apk
+          HOST=$(echo '${{ inputs.url }}' | sed -E 's#https?://([^/]+).*#\1#')
+
+          echo "== generated BuildConfig =="
+          find app/build/generated -name BuildConfig.java -exec cat {} \; || true
+
+          echo "== APK contents =="
           ls -lh "$APK"
-          # Cheap guard against a silently empty buildConfigField: the host
-          # string must appear in the packaged classes.
-          HOST=$(echo '${{ inputs.url }}' | sed -E 's#https://([^/]+).*#\1#')
-          if unzip -p "$APK" classes.dex | grep -qa "$HOST"; then
-            echo "OK — $HOST is present in the APK."
+          unzip -l "$APK"
+
+          # Two independent checks. The generated source is the direct evidence
+          # that the Gradle property arrived; the dex scan proves it survived
+          # into the package. A missing classes.dex means the sources never
+          # compiled in, which an APK build reports as success.
+          if ! find app/build/generated -name BuildConfig.java -exec grep -q "$HOST" {} +; then
+            echo "::error::POCB_URL did not reach the generated BuildConfig — the -PpocbUrl property was not picked up."
+            exit 1
+          fi
+          echo "OK — BuildConfig carries $HOST"
+
+          if ! unzip -l "$APK" | grep -q 'classes.*\.dex'; then
+            echo "::error::The APK contains no dex file — the app sources were not compiled in."
+            exit 1
+          fi
+
+          if unzip -p "$APK" 'classes*.dex' | grep -qa "$HOST"; then
+            echo "OK — $HOST is present in the packaged dex."
           else
-            echo "::error::The harness URL is not in the built APK. The build would show the 'no URL' screen."
+            echo "::error::The harness URL is not in the packaged dex. The app would show the 'no URL' screen."
             exit 1
           fi
 
