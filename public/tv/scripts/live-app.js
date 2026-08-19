@@ -601,6 +601,8 @@ async function main() {
     app.client = createClient({
       developerToken,
       musicUserToken,
+      // Only fires when a catalog call still succeeds, so this really is the
+      // listener's token and not ours. api.js checks before accusing anyone.
       onAuthLost: () => {
         sessionStorage.removeItem("mut");
         show("boot");

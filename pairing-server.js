@@ -73,6 +73,35 @@ function buildDeveloperToken() {
   });
 }
 
+/**
+ * Hand out a developer token that is actually still valid.
+ *
+ * A developer token lives one hour. Minting it once when the process starts
+ * meant the server happily served a dead credential for as long as it ran, and
+ * every Apple call 401'd — which the app then reported to the viewer as *their*
+ * Apple Music session expiring. Wrong credential, wrong person blamed.
+ *
+ * Re-minted ten minutes before expiry, so a token handed out at the boundary is
+ * still good by the time the client uses it.
+ */
+function createDeveloperTokenProvider() {
+  const LIFETIME_MS = 60 * 60 * 1000;
+  const REFRESH_BEFORE_MS = 10 * 60 * 1000;
+
+  let token = null;
+  let mintedAt = 0;
+
+  return function developerToken() {
+    const age = Date.now() - mintedAt;
+    if (!token || age > LIFETIME_MS - REFRESH_BEFORE_MS) {
+      token = buildDeveloperToken();
+      mintedAt = Date.now();
+      console.log("[pairing] developer token minted");
+    }
+    return token;
+  };
+}
+
 function generateCode() {
   let suffix = "";
   for (let i = 0; i < 4; i += 1) {
@@ -205,14 +234,14 @@ function readJsonBody(req, limitBytes = 8 * 1024) {
   });
 }
 
-async function handleRequest(req, res, developerToken) {
+async function handleRequest(req, res, developerTokenFor) {
   const url = new URL(req.url, `http://${req.headers.host || `localhost:${PORT}`}`);
   const { pathname } = url;
 
   if (req.method === "GET" && pathname === "/api/developer-token") {
     // A developer token is designed to be exposed to web clients; it grants
     // catalog access only, never access to a user's library.
-    sendJson(res, 200, { developerToken });
+    sendJson(res, 200, { developerToken: developerTokenFor() });
     return;
   }
 
@@ -383,8 +412,14 @@ async function handleRequest(req, res, developerToken) {
  * the machine running them.
  */
 function createServer(developerToken) {
+  // Accepts a plain string so tests can pass a fake, or a function so the real
+  // server can re-mint. Anything that must not go stale should be a function.
+  const provider = typeof developerToken === "function"
+    ? developerToken
+    : () => developerToken;
+
   return http.createServer((req, res) => {
-    handleRequest(req, res, developerToken).catch((error) => {
+    handleRequest(req, res, provider).catch((error) => {
       console.error(`[pairing] ${error.message}`);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "Internal server error." });
@@ -395,7 +430,7 @@ function createServer(developerToken) {
 
 function main() {
   loadEnvFile();
-  const server = createServer(buildDeveloperToken());
+  const server = createServer(createDeveloperTokenProvider());
 
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`Pairing server listening on http://localhost:${PORT}`);
@@ -408,6 +443,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  createDeveloperTokenProvider,
   deviceCodeIndex,
   failures,
   SESSION_TTL_MS,

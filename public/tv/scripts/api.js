@@ -87,10 +87,36 @@ function createClient({ developerToken, musicUserToken, storefront = "us", fetch
     const response = await fetchImpl(url.toString(), { headers });
     if (!response.ok) {
       const error = new ApiError(response.status, endpoint);
-      if (error.needsReauth && onAuthLost) onAuthLost(error);
+
+      // A 401 on a /me call has two possible causes and they need opposite
+      // responses: the LISTENER's token expired, or OUR developer token did.
+      // Blaming the listener for our own stale credential sends them to re-scan
+      // a QR code that will not help. Ask a catalog endpoint — it needs only the
+      // developer token — and let the answer decide.
+      if (error.needsReauth) {
+        error.developerTokenExpired = !(await developerTokenStillValid());
+        if (error.developerTokenExpired) {
+          error.message += " — our developer token is stale, not your Apple Music session";
+        } else if (onAuthLost) {
+          onAuthLost(error);
+        }
+      }
       throw error;
     }
     return response.json();
+  }
+
+  /** One cheap catalog call. Succeeds only if the developer token is good. */
+  async function developerTokenStillValid() {
+    try {
+      const probe = await fetchImpl(`${API}/v1/catalog/${storefront}/charts?types=songs&limit=1`, {
+        headers: { Authorization: `Bearer ${developerToken}` },
+      });
+      return probe.ok;
+    } catch (networkError) {
+      // Unreachable is not the same as unauthorised; do not accuse either side.
+      return true;
+    }
   }
 
   /**

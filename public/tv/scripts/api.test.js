@@ -92,7 +92,9 @@ test("401 on a library call reports that re-authentication is needed", async () 
   const client = createClient({
     developerToken: DEV,
     musicUserToken: MUT,
-    fetchImpl: fakeFetch([["/v1/me/library/playlists", 401]]),
+    // The catalog route must be specified: the client now probes it to work out
+    // WHOSE token expired. Leaving it unspecified would test the other case.
+    fetchImpl: fakeFetch([["/v1/me/library/playlists", 401], ["/charts", { results: {} }]]),
     onAuthLost: (error) => lost.push(error),
   });
 
@@ -207,4 +209,44 @@ test("library artwork yields no palette, because Apple ships colours only on cat
   const libraryArtwork = { url: "https://.../{w}x{h}{c}.{f}", width: 1200, height: 1200 };
   assert.equal(artworkPalette(libraryArtwork), null);
   assert.ok(artworkUrl(libraryArtwork, 288), "the image itself is still available");
+});
+
+test("a stale developer token is not reported as the listener's session expiring", async () => {
+  // The failure this guards against: the pairing server minted its developer
+  // token once at boot, it expired after an hour, every call 401'd, and the app
+  // told the viewer THEIR Apple Music session had expired. Re-scanning a QR
+  // code could never have fixed it.
+  const lost = [];
+  const client = createClient({
+    developerToken: DEV,
+    musicUserToken: MUT,
+    // Both the library call and the catalog probe fail: our token is the problem.
+    fetchImpl: fakeFetch([["/v1/me/library/playlists", 401], ["/charts", 401]]),
+    onAuthLost: (error) => lost.push(error),
+  });
+
+  await assert.rejects(() => client.libraryPlaylists(), (error) => {
+    assert.equal(error.developerTokenExpired, true);
+    assert.match(error.message, /our developer token is stale/);
+    return true;
+  });
+  assert.equal(lost.length, 0, "the viewer must not be sent back to pairing for our own stale token");
+});
+
+test("a genuinely expired user token still reaches onAuthLost", async () => {
+  const lost = [];
+  const client = createClient({
+    developerToken: DEV,
+    musicUserToken: MUT,
+    // The catalog probe succeeds, so the developer token is fine and the
+    // listener's really has expired.
+    fetchImpl: fakeFetch([["/v1/me/library/playlists", 401], ["/charts", { results: {} }]]),
+    onAuthLost: (error) => lost.push(error),
+  });
+
+  await assert.rejects(() => client.libraryPlaylists(), (error) => {
+    assert.equal(error.developerTokenExpired, false);
+    return true;
+  });
+  assert.equal(lost.length, 1);
 });
