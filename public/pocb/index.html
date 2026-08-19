@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POC-B — Full-Track Playback Test</title>
+<style>
+  /*
+    Diagnostic harness, not product UI. It is read from a sofa, so everything is
+    large; and it is read from a screenshot afterwards, so everything important
+    is on screen at once with no scrolling required to see the verdict.
+  */
+  :root {
+    --bg: #0B0B10;
+    --fg: #F5F6F8;
+    --dim: #9AA0AA;
+    --ok: #35C759;
+    --bad: #FF453A;
+    --warn: #FFD426;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 3vh 4vw;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: clamp(13px, 1.05vw, 26px);
+  }
+  h1 { font-size: 1.9em; margin: 0 0 .2em; }
+  .sub { color: var(--dim); margin: 0 0 1em; }
+
+  #verdict {
+    font-size: 2.4em;
+    font-weight: 700;
+    padding: .4em .6em;
+    border-radius: .3em;
+    margin: 0 0 .6em;
+    background: #1A1A22;
+  }
+  #verdict[data-v="pass"] { background: var(--ok); color: #04240D; }
+  #verdict[data-v="fail"] { background: var(--bad); color: #2A0603; }
+  #verdict[data-v="run"]  { background: var(--warn); color: #2A2300; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: .8em; margin-bottom: 1em; }
+  .cell { background: #14141B; border-radius: .3em; padding: .6em .8em; }
+  .cell b { display: block; color: var(--dim); font-size: .8em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .cell span { font-size: 1.3em; font-variant-numeric: tabular-nums; word-break: break-word; }
+
+  #bar { height: .9em; background: #23232C; border-radius: .45em; overflow: hidden; margin-bottom: 1em; }
+  #fill { height: 100%; width: 0%; background: var(--ok); }
+
+  #log {
+    background: #08080C;
+    border-radius: .3em;
+    padding: .7em .9em;
+    height: 32vh;
+    overflow-y: auto;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: .82em;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .l-ok   { color: var(--ok); }
+  .l-bad  { color: var(--bad); }
+  .l-warn { color: var(--warn); }
+  .l-dim  { color: var(--dim); }
+
+  #pair { font-size: 2.6em; font-weight: 700; letter-spacing: .1em; }
+  a { color: #6FB3FF; }
+</style>
+</head>
+<body>
+
+<h1>POC-B — Full-Track Playback</h1>
+<p class="sub">Gate G1. PASS requires a catalog track to play from 0:00 to its natural end inside this WebView. Stopping near 30&nbsp;s is a preview, and a preview is a FAIL.</p>
+
+<div id="verdict" data-v="run">Starting…</div>
+
+<div class="grid">
+  <div class="cell"><b>Pairing code</b><span id="pair">—</span></div>
+  <div class="cell"><b>Position</b><span id="pos">0:00</span></div>
+  <div class="cell"><b>Duration</b><span id="dur">—</span></div>
+  <div class="cell"><b>Widevine</b><span id="wv">checking…</span></div>
+  <div class="cell"><b>Token path</b><span id="tokpath">—</span></div>
+  <div class="cell"><b>Track</b><span id="track">—</span></div>
+</div>
+
+<div id="bar"><div id="fill"></div></div>
+
+<div id="log"></div>
+
+<script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" data-web-components async></script>
+<script>
+/*
+ * POC-B harness.
+ *
+ * What it proves, in order, so a failure names its own cause:
+ *   1. Can this browser do Widevine at all?              -> requestMediaKeySystemAccess
+ *   2. Can MusicKit JS load and configure here?          -> MusicKit.configure
+ *   3. Can a paired Music User Token be USED by MusicKit, -> setting musicUserToken directly,
+ *      or must the user authorize on this device?           falling back to authorize()
+ *   4. Does a real catalog track play to its natural end? -> the actual gate
+ *
+ * Everything is logged with a timestamp because the useful artifact here is the
+ * log, not the page. Nothing is ever declared PASS by inference.
+ */
+
+const el = (id) => document.getElementById(id);
+const started = Date.now();
+
+function log(message, kind = "") {
+  const stamp = ((Date.now() - started) / 1000).toFixed(1).padStart(6);
+  const line = document.createElement("div");
+  if (kind) line.className = `l-${kind}`;
+  line.textContent = `${stamp}s  ${message}`;
+  el("log").appendChild(line);
+  el("log").scrollTop = el("log").scrollHeight;
+  console.log(`[pocb] ${stamp}s ${message}`);
+}
+
+function verdict(text, state) {
+  el("verdict").textContent = text;
+  el("verdict").dataset.v = state;
+  log(`VERDICT: ${text}`, state === "pass" ? "ok" : state === "fail" ? "bad" : "warn");
+}
+
+function mmss(seconds) {
+  const whole = Math.max(0, Math.floor(seconds || 0));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+/* ---------------------------------------------------------------- *
+ * 1. Environment
+ * ---------------------------------------------------------------- */
+
+/**
+ * Ask for a Widevine key system the way an EME player would. A rejection here
+ * explains a later playback failure completely, and costs nothing to check.
+ */
+async function checkWidevine() {
+  if (!navigator.requestMediaKeySystemAccess) {
+    el("wv").textContent = "no EME";
+    log("navigator.requestMediaKeySystemAccess is missing — this browser has no EME at all.", "bad");
+    return false;
+  }
+  const config = [{
+    initDataTypes: ["cenc"],
+    audioCapabilities: [{ contentType: 'audio/mp4;codecs="mp4a.40.2"' }],
+  }];
+  try {
+    const access = await navigator.requestMediaKeySystemAccess("com.widevine.alpha", config);
+    el("wv").textContent = "available";
+    log(`Widevine available (keySystem=${access.keySystem}).`, "ok");
+    return true;
+  } catch (error) {
+    el("wv").textContent = "UNAVAILABLE";
+    log(`Widevine unavailable: ${error.name} — ${error.message}`, "bad");
+    return false;
+  }
+}
+
+function reportEnvironment() {
+  log(`URL: ${location.href}`, "dim");
+  log(`Secure context: ${window.isSecureContext}`, window.isSecureContext ? "dim" : "bad");
+  log(`UA: ${navigator.userAgent}`, "dim");
+  if (!window.isSecureContext) {
+    log("Not a secure context. EME is blocked outside HTTPS and localhost — serve this over the tunnel.", "bad");
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * 2. Pairing — reuse the existing POC-A flow unchanged
+ * ---------------------------------------------------------------- */
+
+async function pair() {
+  const created = await fetch("/api/session", { method: "POST" }).then((r) => r.json());
+  el("pair").textContent = created.code;
+  log(`Pairing session ${created.code}. On your phone open: ${created.activateUrl}`, "warn");
+
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    const session = await fetch(`/api/session/${created.code}`).then((r) => r.json());
+    if (session.status === "authorized" && session.musicUserToken) {
+      log("Phone authorized. Music User Token received (not printed).", "ok");
+      return session.musicUserToken;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error("Pairing timed out after 5 minutes.");
+}
+
+/* ---------------------------------------------------------------- *
+ * 3. MusicKit
+ * ---------------------------------------------------------------- */
+
+function musicKitReady() {
+  return new Promise((resolve, reject) => {
+    if (window.MusicKit) return resolve();
+    const timer = setTimeout(
+      () => reject(new Error("musickitloaded never fired — the MusicKit CDN did not load.")),
+      20000
+    );
+    document.addEventListener("musickitloaded", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * Try the paired token first. This is the whole point of the QR architecture:
+ * if a token obtained on the phone cannot be used by MusicKit on the TV, the
+ * design has to change, and we need to know that here rather than at G5.
+ */
+async function attachUserToken(music, musicUserToken) {
+  try {
+    music.musicUserToken = musicUserToken;
+  } catch (error) {
+    log(`Assigning musicUserToken threw: ${error.message}`, "warn");
+  }
+
+  if (music.musicUserToken === musicUserToken && music.isAuthorized) {
+    el("tokpath").textContent = "paired (phone)";
+    log("MusicKit accepted the paired token directly. The QR architecture holds.", "ok");
+    return;
+  }
+
+  el("tokpath").textContent = "on-device authorize()";
+  log(
+    "MusicKit did not accept the paired token directly (isAuthorized=" +
+    `${music.isAuthorized}). Falling back to authorize() ON THIS DEVICE.`,
+    "warn"
+  );
+  log("NOTE: needing this fallback is itself a finding — record it in POCB_RESULT.md.", "warn");
+  await music.authorize();
+  if (!music.isAuthorized) throw new Error("authorize() completed but isAuthorized is still false.");
+  log("Authorized on-device.", "ok");
+}
+
+/** Pick a real catalog song from the charts, so no song id is hard-coded. */
+async function pickSong(music) {
+  const result = await music.api.music(
+    "/v1/catalog/us/charts",
+    { types: "songs", limit: 5 }
+  );
+  const songs = result?.data?.results?.songs?.[0]?.data || [];
+  if (!songs.length) throw new Error("Charts returned no songs.");
+
+  const song = songs[0];
+  const durationSeconds = (song.attributes.durationInMillis || 0) / 1000;
+  el("track").textContent = `${song.attributes.name} — ${song.attributes.artistName}`;
+  el("dur").textContent = mmss(durationSeconds);
+  log(`Track: "${song.attributes.name}" by ${song.attributes.artistName} (id ${song.id}, ${mmss(durationSeconds)}).`);
+  return { id: song.id, durationSeconds };
+}
+
+/* ---------------------------------------------------------------- *
+ * 4. The gate itself
+ * ---------------------------------------------------------------- */
+
+/**
+ * Play the track and watch the clock.
+ *
+ * FAIL conditions are explicit and checked, never inferred from silence:
+ *   - playback stalls for 15 s without the position advancing
+ *   - playback ends at or before 35 s on a track longer than 60 s (a preview)
+ *   - MusicKit reports an error
+ * PASS requires the final position to land within 3 s of the catalog duration.
+ */
+async function playAndWatch(music, song) {
+  const PREVIEW_CEILING = 35;
+  const TOLERANCE = 3;
+
+  await music.setQueue({ song: song.id });
+  log("Queue set. Calling play()…");
+  await music.play();
+  log("play() resolved.", "ok");
+
+  return new Promise((resolve) => {
+    let last = 0;
+    let lastChange = Date.now();
+    let settled = false;
+
+    const finish = (passed, reason) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      verdict(passed ? `PASS — played ${mmss(last)} of ${mmss(song.durationSeconds)}` : `FAIL — ${reason}`,
+        passed ? "pass" : "fail");
+      resolve(passed);
+    };
+
+    music.addEventListener("playbackError", (event) => {
+      log(`playbackError: ${JSON.stringify(event)}`, "bad");
+      finish(false, "MusicKit reported a playback error");
+    });
+
+    const timer = setInterval(() => {
+      const position = music.currentPlaybackTime || 0;
+      const state = music.playbackState;
+
+      if (position > last + 0.05) {
+        last = position;
+        lastChange = Date.now();
+        el("pos").textContent = mmss(position);
+        el("fill").style.width = `${Math.min(100, (position / song.durationSeconds) * 100)}%`;
+      }
+
+      // 1 = playing, 2 = paused, 3 = stopped, 10 = completed (MusicKit PlaybackStates)
+      if (state === 10 || (state === 3 && last > 1)) {
+        if (song.durationSeconds > 60 && last <= PREVIEW_CEILING) {
+          finish(false, `stopped at ${mmss(last)} — that is a 30-second preview, not the full track`);
+        } else if (Math.abs(last - song.durationSeconds) <= TOLERANCE) {
+          finish(true, "");
+        } else {
+          finish(false, `ended early at ${mmss(last)} of ${mmss(song.durationSeconds)}`);
+        }
+        return;
+      }
+
+      if (Date.now() - lastChange > 15000) {
+        finish(false, `position stalled at ${mmss(last)} for 15 s (playbackState=${state})`);
+      }
+    }, 500);
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * Run
+ * ---------------------------------------------------------------- */
+
+(async () => {
+  try {
+    reportEnvironment();
+    const widevine = await checkWidevine();
+    if (!widevine) {
+      log("Continuing anyway — MusicKit may still negotiate a key system we did not probe.", "warn");
+    }
+
+    const musicUserToken = await pair();
+
+    log("Waiting for MusicKit JS…");
+    await musicKitReady();
+    const { developerToken } = await fetch("/api/developer-token").then((r) => r.json());
+    await MusicKit.configure({
+      developerToken,
+      app: { name: "POC-B Playback Test", build: "1.0.0" },
+    });
+    const music = MusicKit.getInstance();
+    log("MusicKit configured.", "ok");
+
+    await attachUserToken(music, musicUserToken);
+    const song = await pickSong(music);
+
+    verdict("Playing — watching the clock…", "run");
+    await playAndWatch(music, song);
+  } catch (error) {
+    verdict(`FAIL — ${error.message}`, "fail");
+    log(error.stack || String(error), "bad");
+  }
+})();
+</script>
+</body>
+</html>

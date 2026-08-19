@@ -15,6 +15,7 @@ section you need.
 | `design/NAVIGATION_MODEL.md` | Frontend | You need the screen map, the BACK contract, or focus rules |
 | `design/STORYBOARD.md` | The human user | You want the screen-by-screen walkthrough in plain language |
 | `beta/PROTOTYPE_REVIEW.md` | The human user | They are reviewing the G3 prototype and need the task list and feedback form |
+| `POCB_RUNBOOK.md` | The human user | They are about to run the G1 playback test on a device |
 | `POCB_RESULT.md` | Everyone | Records whether full-track playback works on a real device (gate G1) |
 
 ## Charter section index

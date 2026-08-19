@@ -131,7 +131,18 @@ async function handleRequest(req, res, developerToken) {
   }
 
   if (req.method === "POST" && pathname === "/api/session") {
-    sendJson(res, 201, createSession(url.origin));
+    // Behind a tunnel or any TLS terminator this process only ever sees plain
+    // HTTP, so url.origin would hand the phone an http:// activate link.
+    // MusicKit refuses to run outside a secure context, so that link is not
+    // merely untidy — it breaks authorization outright. Trust the proxy's
+    // x-forwarded-proto when present.
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+      .split(",")[0]
+      .trim();
+    const origin = forwardedProto
+      ? `${forwardedProto}://${url.host}`
+      : url.origin;
+    sendJson(res, 201, createSession(origin));
     return;
   }
 
@@ -183,6 +194,20 @@ async function handleRequest(req, res, developerToken) {
   const activateMatch = pathname.match(/^\/activate\/([A-Za-z0-9-]+)$/);
   if (req.method === "GET" && activateMatch) {
     const page = fs.readFileSync(path.join(__dirname, "public", "activate.html"));
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Length": page.length,
+      "Cache-Control": "no-store",
+    });
+    res.end(page);
+    return;
+  }
+
+  // The POC-B playback harness. Served from this server rather than the
+  // prototype server because it needs the real developer token and the real
+  // pairing endpoints, which only exist here.
+  if (req.method === "GET" && (pathname === "/pocb" || pathname === "/pocb/")) {
+    const page = fs.readFileSync(path.join(__dirname, "public", "pocb", "index.html"));
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Length": page.length,
