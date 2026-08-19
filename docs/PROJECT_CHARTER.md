@@ -108,6 +108,7 @@ Every gate has a PASS criterion that a person or script can check mechanically. 
   3. BACK from any screen returns to the logical parent. On Home, BACK exits the app when nothing is playing, and raises an exit confirmation when playback is in progress. **Both paths are exercised.** (Amended by [VOTE-003](../docs/decisions/VOTE-003-back-at-root.md) — the original wording contradicted the navigation model and would have shipped an unguarded BACK that kills playback.);
   4. No focus trap: a scripted sweep of 200 random D-pad events never leaves focus on a non-visible or null element.
 - **FAIL**: any element reachable only by pointer, any invisible focus state, any focus trap in the 200-event sweep.
+- **Status**: ✅ **PASSED** (2026-08-20) on a physical Android TV. Automated audit 6/6 with **60 fps** on Now Playing, which answers VOTE-001's carried-forward dissent; manual checklist passed after four fixes the audit could not have found — BACK not reaching the page at all, a follow-up fix that trapped the viewer inside the app, LEFT escaping a shelf, and artwork never loading. See `docs/G4_RESULT.md`.
 
 ### G5 — Integration: Login → Browse → Play
 - **PASS**: from a freshly installed APK on the device, one uninterrupted run: pair via phone → library list appears → open a playlist → start a track → track plays to completion → app restarted → still logged in (no re-pairing). Recorded end to end.

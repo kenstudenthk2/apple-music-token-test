@@ -51,6 +51,32 @@ function Stop-Everything {
 }
 
 try {
+    # ---- 0. Refuse to add to a mess ----------------------------------------
+    # Leftover processes cost an evening once. A stale cloudflared keeps its
+    # hostname alive and answering, so the tunnel URL looks healthy while the
+    # server behind it is long gone — Cloudflare then reports 530 and the
+    # obvious reading, "my server is broken", is wrong. Meanwhile a stale node
+    # holds port 8787, so the new server exits and the new tunnel points at
+    # nothing. Both failures look like something else, so refuse to start.
+    $stale = @(Get-Process cloudflared -ErrorAction SilentlyContinue) +
+             @(Get-Process node -ErrorAction SilentlyContinue |
+               Where-Object { $_.Id -ne $PID })
+
+    if ($stale.Count -gt 0) {
+        Write-Host "Found processes already running:" -ForegroundColor Yellow
+        $stale | ForEach-Object {
+            Write-Host ("  {0,-6} {1,-14} started {2}" -f $_.Id, $_.ProcessName, $_.StartTime)
+        }
+        Write-Host ""
+        Write-Host "A leftover tunnel keeps answering with its server gone, which reads as" -ForegroundColor Yellow
+        Write-Host "a broken server rather than a stale process. Clear them first:" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Get-Process cloudflared,node -ErrorAction SilentlyContinue | Stop-Process -Force" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Note that also stops 'npm run token-lifetime' if it is running." -ForegroundColor DarkGray
+        throw "Refusing to start alongside existing cloudflared/node processes."
+    }
+
     # ---- 1. Pairing server -------------------------------------------------
     # Needs the Apple .p8, which is why this cannot run on a CI runner.
     Write-Host "Starting pairing server on :8787…" -ForegroundColor Cyan
@@ -99,6 +125,21 @@ try {
         }
     }
     if (-not $base) { throw "The tunnel did not report a hostname. See $log" }
+
+    # A hostname is not a working tunnel. Prove the whole path end to end before
+    # printing a URL that someone will compile into an APK.
+    $reachable = $false
+    foreach ($i in 1..20) {
+        Start-Sleep -Seconds 1
+        try {
+            $probe = Invoke-WebRequest -Uri "$base/api/developer-token" -UseBasicParsing -TimeoutSec 10
+            if ($probe.StatusCode -eq 200) { $reachable = $true; break }
+        } catch { }
+    }
+    if (-not $reachable) {
+        throw "The tunnel is up but Cloudflare cannot reach the server through it. See $log"
+    }
+    Write-Host "  tunnel reaches the server OK" -ForegroundColor Green
 
     # The launcher, not a single target: one APK can carry one package name,
     # so a single install has to reach every test page rather than making

@@ -16,6 +16,7 @@ section you need.
 | `design/STORYBOARD.md` | The human user | You want the screen-by-screen walkthrough in plain language |
 | `beta/PROTOTYPE_REVIEW.md` | The human user | They are reviewing the G3 prototype and need the task list and feedback form |
 | `HOME_SETUP.md` | The human user | Setting up a machine that has never run this repo |
+| `G4_RESULT.md` | Everyone | Records the D-pad gate result and what the automated audit could not find |
 | `G4_RUNBOOK.md` | The human user | They are running the D-pad audit and manual checklist on the device |
 | `POCB_RUNBOOK.md` | The human user | They are about to run the G1 playback test on a device |
 | `POCB_RESULT.md` | Everyone | Records whether full-track playback works on a real device (gate G1) |
