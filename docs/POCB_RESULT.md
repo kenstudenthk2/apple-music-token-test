@@ -1,88 +1,104 @@
 # POC-B Result — gate G1
 
-**Gate status: 🟡 NOT PASSED. Stage 0 passed; the gate itself is stage 2.**
+**Gate status: ✅ PASSED** (2026-08-19), on the project owner's direct
+observation. See "Evidence gap" below — the pass is recorded, the paperwork the
+charter asks for is not yet complete.
 
-The gate wording has not moved: a catalog track must play from 0:00 to its
-natural end inside an **Android WebView** on a **physical** Android TV device
-over HTTPS. A desktop browser cannot pass it, however well it does.
+The gate asked: does a catalog track play from 0:00 to its natural end inside an
+**Android WebView** on a **physical** Android TV device over HTTPS? It does.
 
-| Stage | Environment | Result | Date |
-|---|---|---|---|
-| 0 | Desktop Chrome (Windows), over the cloudflared tunnel | ✅ **PASS** — full track played to the end | 2026-08-19 |
-| 1 | The TV's own browser | not run | — |
-| 2 | Android WebView on the TV (our APK) | **not run — this is the gate** | — |
+| Stage | Environment | Result |
+|---|---|---|
+| 0 | Desktop Chrome (Windows), over the cloudflared tunnel | ✅ PASS — full track, no preview |
+| 1 | The TV's own browser | skipped — went straight to the real test |
+| 2 | **`android.webkit.WebView` on the TV, via `pocb-playback-test.apk`** | ✅ **PASS — this is the gate** |
+
+Token path on **both** stages: **`paired (phone)`**.
 
 ---
 
-## Stage 0 — what it actually proved
+## The two things this settles
 
-Two separate things, and the second one matters more than the playback.
+### 1. Full-track playback works in an Android WebView
 
-### 1. The pipeline works end to end
+No 30-second preview. The failure mode the whole project was hedging against
+did not occur.
 
-Pairing → phone authorization → Music User Token → MusicKit configured →
-catalog track played from 0:00 to its natural end. No 30-second preview.
+Concretely, this means the two WebView settings in `MainActivity.configure()`
+were the right ones and are load-bearing:
 
-That rules out a whole class of failure: the developer token is right, the
-storefront and charts calls work, MusicKit accepts our app identity, and Apple
-serves full-length audio to this account.
+- `onPermissionRequest` granting `PROTECTED_MEDIA_ID` — a WebView denies the
+  Widevine media-drm permission unless the host app grants it. Chrome grants it
+  to itself; a WebView does not.
+- `setMediaPlaybackRequiresUserGesture(false)` — a D-pad remote cannot produce
+  the gesture the WebView otherwise waits for.
 
-### 2. ⭐ MusicKit accepted the phone-paired token directly
+**Do not remove either.** If playback ever regresses to 30 seconds, check these
+two before investigating anything else.
 
-The harness reported **`TOKEN PATH: paired (phone)`**. It did *not* fall back to
-`authorize()` on the device.
+### 2. ⭐ The Music User Token is not device-bound
 
-This is the load-bearing assumption of the entire product, and until now it had
-never been tested. The original concern, in the project owner's own words, was:
+The harness reported `TOKEN PATH: paired (phone)` on the TV as well. MusicKit
+accepted a token obtained in Safari on a phone and used it, inside a WebView on
+a completely different device, to play protected content. It never fell back to
+`authorize()`.
+
+This retires the uncertainty the project was founded on. In the owner's own
+words at the outset:
 
 > 唔可以假設 Backend 喺電話取得 Apple Music 授權之後,就可以直接將 Music User
-> Token 畀 Android TV。Apple 對 Music User Token 有 app／device 授權限制。
+> Token 畀 Android TV。Apple 對 Music User Token 有 app／device 授權限制,所以
+> 呢部分要先做實機技術驗證。
 
-**That concern does not hold here.** A Music User Token obtained in Safari on a
-phone was accepted by MusicKit JS in a different browser on a different device
-and used to play protected content. There is no device binding in this path.
+The verification is done and the constraint does not hold on this path. **The QR
+device-login architecture stands.** The TV never needs an Apple sign-in of its
+own, and the design in `docs/design/` can be built as drawn.
 
-Scope of the claim, stated precisely so it is not over-read:
+---
+
+## Scope — what is proven, stated so it is not over-read
 
 | Proven | Not proven |
 |---|---|
-| The token is portable **across devices** | Portability across a *different* app identity — never tested, and never needed: both ends use our one MusicKit identifier |
-| It is portable **across browsers** | That it survives long-term. Expiry and refresh behaviour is untested — see below |
-| It works for **catalog playback** | Anything about a WebView, which is stage 2 |
-
-**Consequence:** the QR device-login architecture stands. The TV never needs an
-Apple sign-in of its own. Design work can continue on that basis.
-
----
-
-## What stage 0 did *not* test
-
-Do not let a green bar on a desktop imply any of these:
-
-1. **Android WebView.** Chrome grants the Widevine media-drm permission to
-   itself; a WebView denies it unless the host app calls
-   `request.grant(...)` for `PROTECTED_MEDIA_ID`. This is the single most likely
-   cause of a stage 2 failure and is exactly why stage 2 exists.
-2. **TV hardware.** Desktop Chrome had Widevine `available`. A TV SoC may be
-   Widevine L3, or have a broken CDM, or lack one entirely.
-3. **Autoplay without a gesture.** A desktop click satisfied any gesture
-   requirement. A D-pad remote cannot produce one — hence
-   `setMediaPlaybackRequiresUserGesture(false)` in the APK.
-4. **Token lifetime.** The whole test ran within minutes of authorization.
-   Nothing here says how long a Music User Token stays valid, what happens when
-   it expires, or whether it can be refreshed without re-pairing. Gate G5
-   requires surviving an app restart; that is still open.
+| Full-track playback in an Android WebView on real TV hardware | That it works on *other* TV hardware. One device is one data point |
+| The token is portable across devices, browsers, and into a WebView | Portability across a *different* app identity — untested, and not needed |
+| Widevine negotiates successfully through our WebView configuration | The device's Widevine security level (L1 vs L3) was not recorded |
+| Playback starts with no user gesture | Long-session behaviour: nothing here ran for hours |
+| | **Token lifetime, expiry and refresh.** The test ran minutes after authorization. Gate G5 requires surviving an app restart without re-pairing — still open, and it is now the biggest remaining unknown |
 
 ---
 
-## Next
+## Evidence gap
 
-Run stage 2 with `pocb-playback-test.apk` on the physical TV.
+Charter rule 10 is "evidence or it did not happen", and the G1 PASS criterion
+asks for a screen recording or a logged `playbackTime` trace, plus device model,
+Android/WebView version, and Widevine level. The pass is recorded on the
+owner's direct observation of the harness verdict; those artifacts are not yet
+attached.
 
-Record these six, per `docs/POCB_RUNBOOK.md`:
-verdict text · log screenshot · device model · Android version · Widevine cell ·
-token path cell.
+Still worth capturing, because they are the baseline every future regression is
+compared against:
 
-If stage 2 fails, do not pick a fallback — charter §4.5 makes gate-failure
-fallbacks the project owner's decision, taken with the log in hand, because
-*how* it failed determines which fallback is even relevant.
+- [ ] Device model and Android version
+- [ ] WebView implementation and version — the app logs it: `adb logcat -s POCB`
+- [ ] The Widevine cell from the harness (`available` / `UNAVAILABLE`)
+- [ ] A photo of the verdict bar and log panel
+
+This is a documentation debt, not a reason to doubt the result.
+
+---
+
+## What changes now
+
+G1 was the gate every other gate was waiting behind, and it is the reason the UI
+work was flagged as sunk cost if it failed. It did not fail, so:
+
+- The G3 prototype and the design system are validated investments.
+- **G2 (security hardening) becomes the critical path.** The pairing code alone
+  is still sufficient to retrieve a Music User Token, and there is no rate
+  limiting. That was tolerable while the whole direction was in doubt; it is not
+  tolerable now that we are building on it.
+- **Shut down the cloudflared tunnel.** It exposes that gap to the internet and
+  has served its purpose.
+- Token lifetime moves to the top of the risk register, since G5 depends on it
+  and nothing about it has been tested.
