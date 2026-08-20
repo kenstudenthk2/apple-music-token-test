@@ -103,6 +103,10 @@ const ALIGN_WEIGHT = 0.6;
 // "in the pressed direction". Guards against sub-pixel layout noise.
 const MIN_TRAVEL = 2;
 
+// Two focus changes closer together than this mean the viewer is holding a
+// direction rather than choosing. Roughly one D-pad auto-repeat interval.
+const RAPID_MOVE_MS = 140;
+
 // Default px from a horizontal row's leading edge at which the focused card rests.
 const DEFAULT_SCROLL_OFFSET = 48;
 
@@ -122,6 +126,8 @@ const state = {
   groupMemory: new WeakMap(),
   /** @type {Array<(evt: KeyboardEvent) => boolean|void>} */
   backHandlers: [],
+  lastFocusAt: 0,
+  paceTimer: null,
   observer: null,
   bound: false,
 };
@@ -467,6 +473,26 @@ function focus(el, opts = {}) {
 
   const group = groupOf(el);
   if (group) state.groupMemory.set(group, el);
+
+  /*
+   * Collapse animation while the viewer is hammering the D-pad.
+   *
+   * Apple's focus coordinator "may shorten or speed up the animations depending
+   * on how fast the user is moving between focusable elements". Without it, a
+   * 250ms transition per item queues up when someone holds a direction and the
+   * row visibly lags behind the remote.
+   *
+   * Published as an attribute on the root so CSS decides what to shorten; the
+   * engine has no business knowing which properties a design animates.
+   */
+  const now = Date.now();
+  const rapid = now - state.lastFocusAt < RAPID_MOVE_MS;
+  state.lastFocusAt = now;
+  document.documentElement.dataset.navPace = rapid ? "fast" : "normal";
+  clearTimeout(state.paceTimer);
+  state.paceTimer = setTimeout(() => {
+    document.documentElement.dataset.navPace = "normal";
+  }, RAPID_MOVE_MS * 2);
 
   scrollIntoView(el, !!opts.instant);
 

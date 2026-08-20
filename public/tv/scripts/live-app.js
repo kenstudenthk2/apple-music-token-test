@@ -282,6 +282,36 @@ function renderShelves(shelves) {
   });
 }
 
+/**
+ * Where a row must sit so the focused tile is centred in the viewport.
+ *
+ * Apple's layout guidance says to "make partially hidden content look
+ * symmetrical (equal width on each side)", which only happens when the focused
+ * card parks at the centre. Leading-parked rows — which is what these were —
+ * show a partial card on the right and a hard edge on the left, and that
+ * asymmetry is a large part of why a television UI reads as cheap.
+ *
+ * Clamped at both ends so the first and last cards do not drag the row into
+ * empty space, and a row narrower than the viewport is simply not moved.
+ *
+ * Measured with offsetLeft: the focused tile is scaled, and a painted-rect
+ * measurement would fold that scale into the step.
+ */
+function rowOffsetFor(node, row) {
+  const tiles = row.children;
+  if (!tiles.length) return 0;
+
+  const step = tiles.length > 1
+    ? tiles[1].offsetLeft - tiles[0].offsetLeft
+    : node.offsetWidth;
+  const viewport = row.parentElement.getBoundingClientRect().width;
+  const index = Number(node.dataset.index) || 0;
+
+  const wanted = index * step + node.offsetWidth / 2 - viewport / 2;
+  const maxScroll = Math.max(0, step * tiles.length - viewport);
+  return -Math.min(Math.max(0, wanted), maxScroll);
+}
+
 function positionShelves(node) {
   const stack = el("home-shelves");
   const section = node.closest(".shelf");
@@ -289,18 +319,8 @@ function positionShelves(node) {
   stack.style.transform =
     `translate3d(0, ${-(section.offsetTop - stack.firstElementChild.offsetTop)}px, 0)`;
 
-  // Measured, not assumed. The hard-coded 19.5rem here was wrong — --tile-gap is
-  // var(--space-4), which is 2rem, not 1.5 — so every step drifted 8px and the
-  // error accumulated the further along a row the viewer travelled.
   const row = node.parentElement;
-  const tiles = row.children;
-  // offsetLeft, not getBoundingClientRect: the focused tile is scaled by 1.08,
-  // which moves its painted edge and would poison the measurement.
-  const step = tiles.length > 1
-    ? tiles[1].offsetLeft - tiles[0].offsetLeft
-    : node.offsetWidth;
-  const parked = Math.max(0, Number(node.dataset.index) - 1);
-  row.style.transform = `translate3d(${-parked * step}px, 0, 0)`;
+  row.style.transform = `translate3d(${rowOffsetFor(node, row)}px, 0, 0)`;
 }
 
 
@@ -480,12 +500,7 @@ function positionLibrary(node) {
   const offset = section.offsetTop - track.firstElementChild.offsetTop;
   track.style.setProperty("--shelf-y", `${-offset}px`);
 
-  const tiles = row.children;
-  const step = tiles.length > 1
-    ? tiles[1].offsetLeft - tiles[0].offsetLeft
-    : node.offsetWidth;
-  const parked = Math.max(0, Number(node.dataset.index) - 1);
-  row.style.setProperty("--row-x", `${-parked * step}px`);
+  row.style.setProperty("--row-x", `${rowOffsetFor(node, row)}px`);
 }
 
 /** Tell the stylesheet which axis is moving so it can bias its easing. */

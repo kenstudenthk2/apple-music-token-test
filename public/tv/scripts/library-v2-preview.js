@@ -135,12 +135,18 @@ function position(node) {
   const offset = section.offsetTop - track.firstElementChild.offsetTop;
   track.style.setProperty("--shelf-y", `${-offset}px`);
 
+  // Centre-parked, matching live-app.js exactly. If this harness parked
+  // differently from the shipped screen it would be reviewing a product that
+  // does not exist.
   const tiles = row.children;
   const step = tiles.length > 1
     ? tiles[1].offsetLeft - tiles[0].offsetLeft
     : node.offsetWidth;
-  const parked = Math.max(0, Number(node.dataset.index) - 1);
-  row.style.setProperty("--row-x", `${-parked * step}px`);
+  const viewport = row.parentElement.getBoundingClientRect().width;
+  const wanted = (Number(node.dataset.index) || 0) * step
+    + node.offsetWidth / 2 - viewport / 2;
+  const maxScroll = Math.max(0, step * tiles.length - viewport);
+  row.style.setProperty("--row-x", `${-Math.min(Math.max(0, wanted), maxScroll)}px`);
 }
 
 /** Tell the stylesheet which axis is moving, so it can bias its easing. */

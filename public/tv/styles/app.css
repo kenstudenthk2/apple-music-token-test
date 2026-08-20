@@ -942,3 +942,29 @@
     animation: none;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   FAST NAVIGATION — collapse the animation when the viewer is not choosing
+   Apple's focus coordinator "may shorten or speed up the animations depending
+   on how fast the user is moving between focusable elements". Holding a
+   direction across a long row otherwise queues a 250ms transition per item and
+   the row visibly trails the remote.
+
+   spatial-nav.js sets data-nav-pace="fast" on <html> while focus changes are
+   arriving faster than a D-pad auto-repeat. Only DURATIONS shrink — nothing is
+   disabled, so the moment the viewer stops, the next move eases normally again.
+   -------------------------------------------------------------------------- */
+html[data-nav-pace="fast"] .focusable,
+html[data-nav-pace="fast"] .shelf__row,
+html[data-nav-pace="fast"] .shelves__track,
+html[data-nav-pace="fast"] .tile,
+html[data-nav-pace="fast"] .tile__label {
+  transition-duration: 60ms;
+}
+
+/* The ring is the one thing that must not lag: it is how the viewer knows
+   where they are while everything else is still catching up. */
+html[data-nav-pace="fast"] .focusable::after {
+  transition-duration: 0ms;
+}
