@@ -36,6 +36,7 @@ folder's `CLAUDE.md`, and stop there.
 | [`public/activate.html`](public/CLAUDE.md) | The phone-side authorization page | ⚠️ Auth surface — read `public/CLAUDE.md` before touching |
 | [`android/`](android/CLAUDE.md) | The POC-B WebView host app (gate G1) | You are changing how the TV app hosts the WebView, or building the test APK |
 | [`scripts/`](scripts/CLAUDE.md) | Dev servers and the prototype bundler | You need to run, serve, or bundle the prototype |
+| [`deploy/`](deploy/CLAUDE.md) | Permanent hosting for the pairing server (Docker + Cloudflare Tunnel) | You are deploying, redeploying, or changing how the app is hosted long-term |
 | root `*.js` | Token minting, pairing backend, TV client | ⚠️ Auth surface — see `docs/CLAUDE.md` §Auth before touching |
 
 ## Root files at a glance
