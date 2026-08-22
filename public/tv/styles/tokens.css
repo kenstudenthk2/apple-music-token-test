@@ -182,6 +182,11 @@ html {
                                     [THIRD-PARTY]/[ESTIMATE] scaled from the
                                     devsign.co reproduction (+16pt y, 25pt
                                     blur, 0.3 alpha); static, cross-faded */
+  --focus-sheen: rgba(255, 255, 255, 0.16); /* specular streak on ::before —
+                                    HIG Images' "illumination that makes the
+                                    surface appear to shine"; the third of
+                                    Apple's three focus mechanisms alongside
+                                    scale and elevation */
 
 
   /* ------------------------------------------------------------------------
@@ -357,13 +362,34 @@ body {
    Apply .focusable to any D-pad target; the spatial-navigation layer toggles
    [data-focused="true"]. Only transform and opacity change. The ring and glow
    live on ::after as a pre-rendered box-shadow faded in via opacity, so no
-   shadow is ever interpolated.
+   shadow is ever interpolated. Illumination lives on ::before: a static
+   gradient that sweeps in via opacity + translateX, both allowed properties.
    -------------------------------------------------------------------------- */
 .focusable {
   position: relative;
   transform: scale(1);
   transform-origin: center center;
   transition: transform var(--dur-focus) var(--ease-out);
+}
+
+.focusable::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg,
+    transparent 40%, var(--focus-sheen) 50%, transparent 60%);
+  opacity: 0;
+  transform: translateX(-30%);
+  pointer-events: none;
+  z-index: var(--z-focus-glow);
+  transition: opacity var(--dur-focus) var(--ease-out),
+              transform var(--dur-focus) var(--ease-out);
+}
+
+.focusable[data-focused="true"]::before {
+  opacity: 1;
+  transform: translateX(30%);
 }
 
 .focusable::after {
