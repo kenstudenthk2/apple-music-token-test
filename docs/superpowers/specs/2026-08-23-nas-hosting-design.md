@@ -51,9 +51,17 @@ Ugreen NAS — Docker Compose stack
 |---|---|
 | `deploy/Dockerfile` | `node:20-alpine`, copies only what `npm run pair` needs (root `*.js`, `package.json`) — no dev/test files, no dependencies to install (zero-dep project), runs as a non-root user |
 | `deploy/docker-compose.yml` | Two services (`app`, `cloudflared`) on one internal network. `app` binds `0.0.0.0:${PORT}` (`PORT` defaults to 8787, the same default `pairing-server.js` already uses) — safe, since the port is never published to the host or router, only reachable inside the compose network |
-| `deploy/cloudflared/config.yml` | Tunnel config: routes the public hostname to `http://app:8787` |
+| `deploy/.env.example` | Template listing the required variables, incl. `TUNNEL_TOKEN` |
+| `deploy/RUNBOOK.md` | The owner-run steps: create the tunnel, route DNS, get a run token |
 | `deploy/CLAUDE.md` | Folder menu entry + secrets rule for this subtree |
 | `docs/HOME_SETUP.md` (append) | Point at the new permanent path as an alternative to the temporary tunnel session |
+
+**Revised during planning:** `cloudflared` runs in token mode
+(`cloudflared tunnel run` with a `TUNNEL_TOKEN` env var, obtained via
+`cloudflared tunnel token <name>`) rather than a mounted `config.yml` +
+`credentials.json`. Same architecture, one fewer file and no volume needed
+for the tunnel client — Cloudflare's own recommended approach for a
+containerized sidecar.
 
 ## Required code change
 
@@ -71,11 +79,12 @@ already derives the public origin from `x-forwarded-proto` /
 
 ## Secrets handling
 
-`.p8`, `.env`, and the tunnel's own `credentials.json` (generated when the
-tunnel is created) live in a directory on the NAS **outside** the git
-checkout, bind-mounted into the containers at runtime. None of the three are
-ever baked into the Docker image or committed. `deploy/CLAUDE.md` states this
-rule explicitly so it survives handoff to a future session.
+`.p8` lives in a directory on the NAS **outside** the git checkout,
+bind-mounted read-only into the `app` container at runtime. `deploy/.env`
+(holding `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `SECRETS_DIR`, and `TUNNEL_TOKEN`)
+is gitignored and never leaves the NAS. None of these are ever baked into
+the Docker image or committed. `deploy/CLAUDE.md` states this rule
+explicitly so it survives handoff to a future session.
 
 ## What the owner runs themselves
 
