@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID}
+      APPLE_KEY_ID: ${APPLE_KEY_ID}
+      APPLE_PRIVATE_KEY_PATH: /secrets/AuthKey.p8
+    volumes:
+      - ${SECRETS_DIR}/AuthKey.p8:/secrets/AuthKey.p8:ro
+    networks:
+      - internal
+    # Deliberately no `ports:` — nothing is published to the NAS's host
+    # network. cloudflared is the only way in. See deploy/CLAUDE.md rule 2.
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks:
+      - internal
+    depends_on:
+      - app
+
+networks:
+  internal:

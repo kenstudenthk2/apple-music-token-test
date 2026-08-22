@@ -13,6 +13,8 @@ This folder is for the one deployment meant to stay up.
 | File | Owns | Load it when |
 |---|---|---|
 | `Dockerfile` | Builds the `pairing-server.js` image. Build context is the repo root — see the file's own header comment | You are changing what the image contains or how it starts |
+| `docker-compose.yml` | The two-container stack (`app`, `cloudflared`) | You are changing how the containers are wired, their env vars, or restart policy |
+| `.env.example` | Template for `deploy/.env` (gitignored, never commit the real one) | You need to know which variables the stack requires |
 
 ## Rules
 
