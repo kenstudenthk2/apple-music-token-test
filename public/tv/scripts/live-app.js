@@ -52,11 +52,14 @@ function show(name, { push = true } = {}) {
   const current = document.querySelector('[data-focused="true"]');
   if (current && app.screen !== "boot") app.focusMemory.set(app.screen, current);
   if (push && app.screen !== "boot") app.history.push(app.screen);
+  const leavingNow = app.screen === "now";
 
   for (const screen of document.querySelectorAll(".screen")) {
     screen.dataset.active = String(screen.dataset.screen === name);
   }
   app.screen = name;
+  if (leavingNow) stopNowPlayingTimers();
+  if (name === "now") wakeNowPlaying();
 
   for (const item of document.querySelectorAll(".nav__item[data-target]")) {
     item.dataset.current = String(item.dataset.target === name);
@@ -654,6 +657,67 @@ async function runSearch() {
  * ------------------------------------------------------------------ */
 
 /**
+ * Now Playing — chrome auto-hide and idle/burn-in protection.
+ * Timings are NOW_PLAYING_V2.md §5: chrome hides 8s after the last input
+ * while playing; idle (dim, drift, hide meta+transport+ring) sets after
+ * 300s of no input regardless of playback state. Both only run while
+ * "now" is the active screen; any key restarts both clocks.
+ */
+const CHROME_HIDE_MS = 8000;
+const IDLE_MS = 300000;
+const IDLE_SHIFT_MS = 90000;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+let chromeTimer = null;
+let idleTimer = null;
+let idleShiftTimer = null;
+
+function armChromeTimer() {
+  clearTimeout(chromeTimer);
+  const now = el("now");
+  if (app.screen !== "now") return;
+  if (now.dataset.state !== "playing" && now.dataset.state !== "starting") {
+    now.dataset.chrome = "shown";
+    return;
+  }
+  chromeTimer = setTimeout(() => { now.dataset.chrome = "hidden"; }, CHROME_HIDE_MS);
+}
+
+function armIdleTimer() {
+  clearTimeout(idleTimer);
+  if (app.screen !== "now") return;
+  idleTimer = setTimeout(() => {
+    const now = el("now");
+    now.dataset.idle = "true";
+    if (reducedMotion.matches) {
+      let shift = 0;
+      idleShiftTimer = setInterval(() => {
+        shift = (shift + 1) % 4;
+        now.style.setProperty("--now-idle-shift", String(shift));
+      }, IDLE_SHIFT_MS);
+    }
+  }, IDLE_MS);
+}
+
+/** Any D-pad event, or entering the screen, clears both hide states and restarts the clocks. */
+function wakeNowPlaying() {
+  clearInterval(idleShiftTimer);
+  idleShiftTimer = null;
+  const now = el("now");
+  now.dataset.idle = "false";
+  now.style.setProperty("--now-idle-shift", "0");
+  armChromeTimer();
+  armIdleTimer();
+}
+
+function stopNowPlayingTimers() {
+  clearTimeout(chromeTimer);
+  clearTimeout(idleTimer);
+  clearInterval(idleShiftTimer);
+  idleShiftTimer = null;
+}
+
+/**
  * Drive the turntable.
  *
  * Everything the stylesheet needs arrives as a custom property or an attribute,
@@ -678,6 +742,7 @@ function renderNowPlaying(state) {
         if (now.dataset.state === "starting") now.dataset.state = "playing";
       }, 1000);
     }
+    armChromeTimer();
   }
 
   now.style.setProperty("--now-progress", String(ratio));
@@ -755,6 +820,10 @@ async function playItem(item, credentials, source) {
  * ------------------------------------------------------------------ */
 
 function wireInput(credentials) {
+  window.addEventListener("keydown", () => {
+    if (app.screen === "now") wakeNowPlaying();
+  }, true);
+
   document.addEventListener("spatialfocus", (event) => {
     for (const stale of document.querySelectorAll('[data-focused="true"]')) {
       stale.removeAttribute("data-focused");
