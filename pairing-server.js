@@ -31,6 +31,12 @@ const path = require("node:path");
 const { createDeveloperToken, loadEnvFile } = require("./test-token");
 
 const PORT = Number(process.env.PORT || 8787);
+// Local dev binds loopback only. The Docker Compose network (deploy/) sets
+// HOST=0.0.0.0 so the cloudflared sidecar can reach this container by its
+// service name — see docs/superpowers/specs/2026-08-23-nas-hosting-design.md.
+function resolveHost() {
+  return process.env.HOST || "127.0.0.1";
+}
 // Five minutes. Long enough to find your phone, short enough that a live code
 // is rarely there to be found.
 const SESSION_TTL_MS = 5 * 60 * 1000;
@@ -456,9 +462,10 @@ function createServer(developerToken) {
 function main() {
   loadEnvFile();
   const server = createServer(createDeveloperTokenProvider());
+  const host = resolveHost();
 
-  server.listen(PORT, "127.0.0.1", () => {
-    console.log(`Pairing server listening on http://localhost:${PORT}`);
+  server.listen(PORT, host, () => {
+    console.log(`Pairing server listening on http://${host}:${PORT}`);
     console.log("Start the TV side with: node tv-client.js");
   });
 }
@@ -475,6 +482,7 @@ module.exports = {
   createServer,
   createSession,
   generateCode,
+  resolveHost,
   sessions,
   sweepExpiredSessions,
 };

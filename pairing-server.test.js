@@ -7,6 +7,7 @@ const {
   deviceCodeIndex,
   failures,
   generateCode,
+  resolveHost,
   sessions,
 } = require("./pairing-server");
 
@@ -304,5 +305,32 @@ test("the user code stays short and unambiguous for a 10-foot UI", async () => {
 test("generateCode omits characters that are ambiguous on a television", () => {
   for (let i = 0; i < 200; i += 1) {
     assert.doesNotMatch(generateCode(), /[01OI]/);
+  }
+});
+
+
+/* ---------------------------------------------------------------- *
+ * Listen host — Docker Compose needs 0.0.0.0, local dev needs 127.0.0.1
+ * ---------------------------------------------------------------- */
+
+test("resolveHost defaults to loopback when HOST is unset", () => {
+  const original = process.env.HOST;
+  delete process.env.HOST;
+  try {
+    assert.equal(resolveHost(), "127.0.0.1");
+  } finally {
+    if (original === undefined) delete process.env.HOST;
+    else process.env.HOST = original;
+  }
+});
+
+test("resolveHost honours HOST when set, for the Docker Compose network", () => {
+  const original = process.env.HOST;
+  process.env.HOST = "0.0.0.0";
+  try {
+    assert.equal(resolveHost(), "0.0.0.0");
+  } finally {
+    if (original === undefined) delete process.env.HOST;
+    else process.env.HOST = original;
   }
 });
