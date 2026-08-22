@@ -12,6 +12,7 @@ This folder is for the one deployment meant to stay up.
 
 | File | Owns | Load it when |
 |---|---|---|
+| `Dockerfile` | Builds the `pairing-server.js` image. Build context is the repo root — see the file's own header comment | You are changing what the image contains or how it starts |
 
 ## Rules
 
