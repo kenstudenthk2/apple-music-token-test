@@ -157,3 +157,12 @@ Its answer decides [ESCALATION-003](decisions/ESCALATION-003-token-persistence.m
 | Tunnel prints no hostname | cloudflared could not reach Cloudflare; check the network |
 
 Send me the exact error rather than working around it.
+
+---
+
+## 7. Permanent hosting, instead of a per-session tunnel
+
+Everything above brings up a **temporary** session for local development.
+For a permanent deployment on the owner's own NAS — a stable URL that
+survives reboots and doesn't need `pocb-session.ps1` running — see
+`deploy/RUNBOOK.md` instead.

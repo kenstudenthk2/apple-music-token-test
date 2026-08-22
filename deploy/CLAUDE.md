@@ -15,6 +15,7 @@ This folder is for the one deployment meant to stay up.
 | `Dockerfile` | Builds the `pairing-server.js` image. Build context is the repo root — see the file's own header comment | You are changing what the image contains or how it starts |
 | `docker-compose.yml` | The two-container stack (`app`, `cloudflared`) | You are changing how the containers are wired, their env vars, or restart policy |
 | `.env.example` | Template for `deploy/.env` (gitignored, never commit the real one) | You need to know which variables the stack requires |
+| `RUNBOOK.md` | The manual, owner-run steps: Cloudflare Tunnel creation, DNS routing, `deploy/.env`, first `docker compose up` | You are standing up the stack for the first time, or rotating the tunnel token |
 
 ## Rules
 
