@@ -42,20 +42,24 @@ html {
 
   /* ------------------------------------------------------------------------
      2. OVERSCAN SAFE AREA
-     Consumer TVs still crop 3-5% of the signal. A 5% inset on all sides is
-     the Android TV / Google TV published guidance and the worst case we
-     design for. Expressed in vw/vh so the inset stays a true 5% at every
-     resolution:
-       1080p -> 96px left/right,  54px top/bottom
-       720p  -> 64px left/right,  36px top/bottom
-       4K    -> 192px left/right, 108px top/bottom
+     Consumer TVs still crop 3-5% of the signal. Horizontal stays at the
+     Android TV / Google TV published 5% — the worst case we design for, and
+     tighter than Apple's own 80pt/4.17% here, so it is kept as-is rather
+     than traded away. Vertical adopts Apple's HIG Layout value (60pt/5.56%
+     at 1080p, APPLE_TV_MUSIC_UX.md §4): it is MORE generous than Android's
+     5%, so there is no safety tradeoff, and it is what the 40pt/100pt grid
+     gaps below are built around. Expressed in vw/vh so both insets stay a
+     true % at every resolution:
+       1080p -> 96px left/right,  60px top/bottom
+       720p  -> 64px left/right,  40px top/bottom
+       4K    -> 192px left/right, 120px top/bottom
      NOTHING functional or readable may sit outside this box. Backgrounds,
      art bleed and row "peek" may.
      ------------------------------------------------------------------------ */
   --safe-x: 5vw;
-  --safe-y: 5vh;
-  --safe-width: 90vw;   /* 1728px @1080p — the usable content width */
-  --safe-height: 90vh;  /*  972px @1080p */
+  --safe-y: 5.5556vh;      /* 60pt @1080p — HIG Layout safe area, top/bottom */
+  --safe-width: 90vw;      /* 1728px @1080p — the usable content width */
+  --safe-height: 88.8889vh; /* 960px @1080p */
 
 
   /* ------------------------------------------------------------------------
@@ -297,10 +301,10 @@ html {
   --tile-size:       18rem;   /* 288px square album/playlist art */
   --tile-wide-w:     32rem;   /* 512px 16:9 hero/video tile */
   --tile-wide-h:     18rem;   /* 288px */
-  --tile-gap:        var(--space-4);  /* 32px */
+  --tile-gap:        2.5rem;  /* 40px — HIG Layout grid gap (was --space-4/32px) */
   --tile-label-block: 4.5rem; /* 72px: 28px title + 4px + 24px subtitle */
   --shelf-header-h:  3.5rem;  /* 56px */
-  --shelf-gap:       var(--space-5);  /* 48px between shelves */
+  --shelf-gap:       6.25rem;  /* 100px between shelves — HIG Layout minimum row spacing (was --space-5/48px) */
   --nav-height:      6rem;    /* 96px top nav */
   --nowplaying-h:    8rem;    /* 128px persistent now-playing bar */
   --control-size:    5.5rem;  /* 88px transport button */
