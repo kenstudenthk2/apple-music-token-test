@@ -33,8 +33,8 @@ jobs:
             *) echo "::error::APP_URL must start with https:// — EME is blocked outside a secure context."; exit 1 ;;
           esac
           case "$APP_URL" in
-            */tv/*) ;;
-            *) echo "::error::APP_URL should point at .../tv/..."; exit 1 ;;
+            */tv/*|*/tv) ;;
+            *) echo "::error::APP_URL should point at .../tv/ — note the trailing slash is required if the path ends there."; exit 1 ;;
           esac
           echo "APP_URL passed validation (value not printed — see secret masking)."
 

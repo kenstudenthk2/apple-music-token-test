@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        // The harness is served over HTTPS and must stay that way: EME is
+        // The app is served over HTTPS and must stay that way: EME is
         // blocked outside a secure context.
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
 
@@ -128,7 +128,7 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onConsoleMessage(ConsoleMessage message) {
-                // Mirror the harness's log into logcat so the evidence survives
+                // Mirror the app's log into logcat so the evidence survives
                 // even if the screen is photographed badly.
                 Log.i(TAG, "console[" + message.messageLevel() + "] " + message.message()
                         + " (" + message.sourceId() + ":" + message.lineNumber() + ")");
@@ -209,10 +209,11 @@ public class MainActivity extends Activity {
      *
      * A hardware BACK press does not produce a DOM keydown — Android routes it
      * straight here. So every back handler the web app registers is invisible
-     * to the remote, and the previous version of this method went directly to
-     * WebView history: from Now Playing, BACK left the app's own screen stack
-     * entirely and reloaded the previous page. The automated D-pad audit missed
-     * it completely, because a synthetic Escape event does reach the page.
+     * to the remote unless this bridges to it: going straight to WebView
+     * history instead would leave the app's own screen stack entirely and
+     * reload the previous page — a real bug found in the POC-B test harness
+     * this WebView configuration is copied from, and one an automated D-pad
+     * audit could not catch (a synthetic Escape event does reach the page).
      *
      * The page answers synchronously via __onAndroidBack; only if it declines
      * do we fall back to history, and then to leaving the app.
