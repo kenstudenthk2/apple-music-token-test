@@ -23,7 +23,7 @@ what gate G7 actually requires) follows once this is done.
 | New folder or reuse `android/`? | New: `android-app/` | `android/CLAUDE.md` forbids growing features there; keeps the disposable test and the real product from tangling |
 | Package name | `tv.appletune.player` | Distinct from `tv.appletune.pocb`, so both can be installed side by side if ever useful for comparison |
 | App display name | AppleTune | Matches the brand already used throughout the live UI (nav bar, prototype title) |
-| Is the URL hardcoded in source? | No — a GitHub Actions workflow-dispatch input, same as POC-B's `POCB_URL` | Repo is confirmed **public** (`gh repo view`); hardcoding the owner's real home domain into committed source would expose it in public git history permanently |
+| Is the URL hardcoded in source? | No — a GitHub **repository secret** (`APP_URL`), read by the workflow at build time | Repo is confirmed **public** (`gh repo view`). A `workflow_dispatch` *input* (POC-B's `POCB_URL` pattern) is echoed into the run's public log — fine for POC-B's short-lived tunnel URL, but this URL is now permanent, so that would expose it forever. A repository secret is masked in all logs automatically, is never in git history, and needs no re-pasting on every build — strictly better here than the input pattern. |
 | Signing | Debug, for this sub-project | Debug-signed APKs sideload fine on Android TV (proven by POC-B); proper release signing is deliberately deferred to sub-project 3 (G7) |
 
 ## What gets built
@@ -31,7 +31,7 @@ what gate G7 actually requires) follows once this is done.
 | File | Basis | Change from the source it's based on |
 |---|---|---|
 | `android-app/app/src/main/java/tv/appletune/player/MainActivity.java` | Copy of `android/app/src/main/java/tv/appletune/pocb/MainActivity.java` | Package renamed `tv.appletune.pocb` → `tv.appletune.player`; `BuildConfig.POCB_URL` → `BuildConfig.APP_URL`; the "no URL compiled in" message updated to reference the new Gradle property name; log tag `POCB` → `APPLETUNE`. WebView configuration (Widevine grant, `setMediaPlaybackRequiresUserGesture(false)`, BACK bridge via `__onAndroidBack`, exit bridge, error display) is copied **unchanged** — it is already proven on real hardware (`docs/POCB_RESULT.md`, `docs/G4_RESULT.md`) and this design does not revisit it. |
-| `android-app/app/build.gradle.kts` | Copy of `android/app/build.gradle.kts` | `namespace`/`applicationId` → `tv.appletune.player`; `POCB_URL` build config field → `APP_URL`; Gradle property read renamed `pocbUrl` → `appUrl`; app name string changed to "AppleTune" (see below) |
+| `android-app/app/build.gradle.kts` | Copy of `android/app/build.gradle.kts` | `namespace`/`applicationId` → `tv.appletune.player`; `POCB_URL` build config field → `APP_URL`; source changes from a Gradle **project property** (`project.findProperty("pocbUrl")`, POC-B's dispatch-input pattern) to an **environment variable** (`System.getenv("APP_URL")`), since the workflow now injects the value from a repository secret via `env:`, not a `-P` flag |
 | `android-app/app/src/main/AndroidManifest.xml` | Copy of `android/app/src/main/AndroidManifest.xml` | No structural change — same touchscreen/leanback `not-required` declarations, same dual launcher intent-filters (phone + TV), same banner/icon reference |
 | `android-app/app/src/main/res/values/strings.xml` | New (POC-B inlines nothing comparable — its label is implicit) | `app_name = "AppleTune"` |
 | `android-app/app/src/main/res/drawable/banner.xml` | Copy of `android/app/src/main/res/drawable/banner.xml` | Unchanged — same near-black ground, same accent-red play-circle mark, already vector (no binary assets) |
@@ -39,7 +39,7 @@ what gate G7 actually requires) follows once this is done.
 | `android-app/settings.gradle.kts` | Copy of `android/settings.gradle.kts` | Project name updated to match the new module |
 | `android-app/gradle.properties` | Copy of `android/gradle.properties` | Unchanged |
 | `android-app/CLAUDE.md` | New | Folder menu + rules — the mirror image of `android/CLAUDE.md`'s "this is disposable," stating instead "this is the product; changes here should be deliberate" |
-| `.github/workflows/appletune-apk.yml` | Copy of `.github/workflows/pocb-apk.yml` | `url` input description updated; URL validation's accepted-path check narrows to `*/tv/*` (POC-B's version also accepted `*/pocb/`, not relevant here); `working-directory: android` → `android-app`; Gradle property `-PpocbUrl` → `-PappUrl`; artifact name `pocb-apk` → `appletune-apk`; the BuildConfig/dex verification steps carry over unchanged in structure, checking for `APP_URL`/the new artifact path instead |
+| `.github/workflows/appletune-apk.yml` | Copy of `.github/workflows/pocb-apk.yml` | No `url` input at all — `workflow_dispatch` takes no parameters, since the URL comes from the `APP_URL` repository secret via `env:` instead. The validation step still runs the same HTTPS/path checks, reading `$URL` from the env var; GitHub Actions masks the secret's literal value in ALL step output automatically (not just direct `${{ secrets.* }}` references), so this remains safe on a public repo. URL validation's accepted-path check narrows to `*/tv/*` (POC-B's version also accepted `*/pocb/`, not relevant here); `working-directory: android` → `android-app`; the Gradle invocation drops `-PpocbUrl=...` entirely, since `build.gradle.kts` now reads `System.getenv("APP_URL")`; artifact name `pocb-apk` → `appletune-apk`; the BuildConfig/dex verification steps carry over unchanged in structure, checking for the presence of the (masked) host instead |
 | Root `CLAUDE.md` | Modify | Add a menu row for `android-app/`, next to the existing `android/` row, so both are distinguishable at a glance |
 
 ## Explicit non-goals
@@ -63,9 +63,13 @@ task should:
 
 1. Get the code to compile logically (careful reading, matching the
    existing proven file line for line except the documented renames).
-2. Actually dispatch `appletune-apk.yml` with a real (or the owner's real)
-   URL and confirm the workflow's own verification steps pass (BuildConfig
-   carries the host, the dex contains it, the artifact uploads) — the
-   workflow already does this checking itself, inherited from POC-B's.
+2. Have the owner set the `APP_URL` repository secret once
+   (`gh secret set APP_URL`, or the GitHub UI — a controller session should
+   not type or handle the owner's real URL itself, matching how secrets are
+   handled everywhere else in this project), then dispatch
+   `appletune-apk.yml` and confirm the workflow's own verification steps
+   pass (BuildConfig carries the host, the dex contains it, the artifact
+   uploads) — the workflow already does this checking itself, inherited
+   from POC-B's.
 3. Sideloading and running on a real TV is the owner's own step, same as
    every other physical-device verification in this project.
