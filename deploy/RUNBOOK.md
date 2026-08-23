@@ -6,7 +6,7 @@ Cloudflare login, the same reason `scripts/pocb-session.ps1` is run by hand
 (see `scripts/CLAUDE.md`).
 
 This repo must already be cloned somewhere on the NAS (or wherever you're
-running `docker compose` from) before starting — step 5 assumes it.
+running `docker compose` from) before starting — step 6 assumes it.
 
 ## 1. Copy the secrets onto the NAS
 
@@ -26,7 +26,7 @@ cloudflared tunnel create appletune-pairing
 ```
 
 This prints a tunnel ID and writes a credentials file locally — the stack
-in this repo does NOT use that credentials file (see step 4), so it does
+in this repo does NOT use that credentials file (see step 5), so it does
 not need to be copied anywhere.
 
 ## 3. Route your domain to the tunnel
