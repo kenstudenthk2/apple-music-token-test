@@ -35,6 +35,7 @@ folder's `CLAUDE.md`, and stop there.
 | [`public/tv/`](public/tv/CLAUDE.md) | The TV app front end — screens, styles, navigation | You are building or changing anything the viewer sees on the TV |
 | [`public/activate.html`](public/CLAUDE.md) | The phone-side authorization page | ⚠️ Auth surface — read `public/CLAUDE.md` before touching |
 | [`android/`](android/CLAUDE.md) | The POC-B WebView host app (gate G1) | You are changing how the TV app hosts the WebView, or building the test APK |
+| [`android-app/`](android-app/CLAUDE.md) | The real AppleTune host app | You are changing the installable app itself — not the disposable G1 test harness |
 | [`scripts/`](scripts/CLAUDE.md) | Dev servers and the prototype bundler | You need to run, serve, or bundle the prototype |
 | [`deploy/`](deploy/CLAUDE.md) | Permanent hosting for the pairing server (Docker + Cloudflare Tunnel) | You are deploying, redeploying, or changing how the app is hosted long-term |
 | root `*.js` | Token minting, pairing backend, TV client | ⚠️ Auth surface — see `docs/CLAUDE.md` §Auth before touching |

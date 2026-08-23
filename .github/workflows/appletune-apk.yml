@@ -1,0 +1,98 @@
+name: Build AppleTune APK
+
+# Unlike POC-B's workflow, this takes no dispatch input — the URL is
+# permanent, so it lives in the APP_URL repository secret instead. A
+# workflow_dispatch input would be echoed into this run's public log
+# (this repo is public); a secret is masked in all output automatically.
+# Set it once: gh secret set APP_URL, or Settings > Secrets and variables
+# > Actions in the GitHub UI.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Reject a URL that cannot work
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::APP_URL repository secret is not set. Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+          # HTTPS is not a style preference here: EME, and therefore Widevine,
+          # is blocked outside a secure context, so an http:// build would fail
+          # for a reason that has nothing to do with the app itself.
+          case "$APP_URL" in
+            https://*) ;;
+            *) echo "::error::APP_URL must start with https:// — EME is blocked outside a secure context."; exit 1 ;;
+          esac
+          case "$APP_URL" in
+            */tv/*|*/tv) ;;
+            *) echo "::error::APP_URL should point at .../tv/ — note the trailing slash is required if the path ends there."; exit 1 ;;
+          esac
+          echo "APP_URL passed validation (value not printed — see secret masking)."
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build debug APK
+        working-directory: android-app
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Confirm the URL was compiled in
+        working-directory: android-app
+        run: |
+          set -u
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          HOST=$(echo "$APP_URL" | sed -E 's#https?://([^/]+).*#\1#')
+
+          echo "== APK contents =="
+          ls -lh "$APK"
+          unzip -l "$APK"
+
+          # Two independent checks, same shape as POC-B's. The generated
+          # source is direct evidence the environment variable arrived; the
+          # dex scan proves it survived into the package. Neither check ever
+          # prints $APP_URL itself — only $HOST, and GitHub Actions masks
+          # any occurrence of the full secret value regardless, but the host
+          # alone is not the full URL and is not masked, which is fine: it is
+          # not sensitive on its own once DNS for it is already public.
+          if ! find app/build/generated -name BuildConfig.java -exec grep -q "$HOST" {} +; then
+            echo "::error::APP_URL did not reach the generated BuildConfig — the secret may be empty or malformed."
+            exit 1
+          fi
+          echo "OK — BuildConfig carries the configured host"
+
+          if ! unzip -l "$APK" | grep -q 'classes.*\.dex'; then
+            echo "::error::The APK contains no dex file — the app sources were not compiled in."
+            exit 1
+          fi
+
+          if unzip -p "$APK" 'classes*.dex' | grep -qa "$HOST"; then
+            echo "OK — the configured host is present in the packaged dex."
+          else
+            echo "::error::The configured host is not in the packaged dex. The app would show the 'no URL' screen."
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: appletune-apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
