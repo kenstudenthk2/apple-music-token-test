@@ -99,8 +99,10 @@ cloudflared tunnel create <name>
 cloudflared tunnel route dns <name> <subdomain>.<domain>
 ```
 
-The owner runs these once on/for the NAS; the resulting `credentials.json`
-is what `deploy/cloudflared/config.yml` and the compose file reference.
+The owner runs these once on/for the NAS. As revised during planning (see
+Components above), the compose file's `cloudflared` service uses only a
+`TUNNEL_TOKEN` obtained via `cloudflared tunnel token <name>` — no
+`credentials.json` file needs to be referenced or copied anywhere.
 
 ## Testing
 

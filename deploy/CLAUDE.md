@@ -27,8 +27,14 @@ This folder is for the one deployment meant to stay up.
    `ports:` mapping to `docker-compose.yml` defeats the reason this exists.
 3. **The Docker build context is the repo root**, not this folder — the
    image needs `pairing-server.js`, `test-token.js`, and `public/` from
-   there. See `deploy/Dockerfile`'s own comments once it exists.
+   there. See `deploy/Dockerfile`'s own comments.
 4. **Creating the actual Cloudflare Tunnel needs the owner's own Cloudflare
-   login.** No agent session can do this — see `deploy/RUNBOOK.md` once it
-   exists, and `scripts/CLAUDE.md`'s note on `pocb-session.ps1` for the same
-   reasoning applied elsewhere in this repo.
+   login.** No agent session can do this — see `deploy/RUNBOOK.md`, and
+   `scripts/CLAUDE.md`'s note on `pocb-session.ps1` for the same reasoning
+   applied elsewhere in this repo.
+5. **The root `.dockerignore`'s exclusions are root-anchored on purpose**
+   for `scripts`/`docs`/`android`/`secure`/`dist` — making them recursive
+   (`**/scripts` etc.) previously matched `public/tv/scripts/` too and
+   silently stripped the entire TV app's JavaScript from the image. Do
+   not "fix" these back to recursive without checking for nested-name
+   collisions under `public/` first.

@@ -48,6 +48,7 @@ folder's `CLAUDE.md`, and stop there.
 | `pairing-server.js` | The QR pairing backend. Serves the developer token and the activate page. |
 | `tv-client.js` | CLI stand-in for the TV during POC-A. Polls for authorization, reads the library. |
 | `package.json` | npm scripts — see below. |
+| `.dockerignore` | What never enters the Docker build context (`deploy/`). Patterns for `scripts`/`docs`/`android`/`secure`/`dist` are deliberately root-anchored, not recursive — see the file's own comment. |
 
 ## Commands
 

@@ -14,6 +14,9 @@ services:
       - internal
     # Deliberately no `ports:` — nothing is published to the NAS's host
     # network. cloudflared is the only way in. See deploy/CLAUDE.md rule 2.
+    # cloudflared's Public Hostname config (deploy/RUNBOOK.md step 4) must
+    # point at http://app:8787 — that's this container, on this network,
+    # on the port pairing-server.js listens on by default.
 
   cloudflared:
     image: cloudflare/cloudflared:latest

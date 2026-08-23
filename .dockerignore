@@ -1,11 +1,16 @@
+# Root-anchored on purpose for scripts/docs/android/secure/dist: a
+# recursive **/scripts pattern here previously matched public/tv/scripts/
+# too — the entire TV app's JavaScript — and silently stripped it from
+# the image. Do not make these recursive again without checking for
+# nested-name collisions under public/.
+scripts
+docs
+android
+secure
+dist
+
 **/.git
 **/node_modules
-**/android
-**/docs
-**/scripts
-**/secure
 **/.env
 **/*.p8
 **/*.test.js
-**/dist
-**/deploy/.env
